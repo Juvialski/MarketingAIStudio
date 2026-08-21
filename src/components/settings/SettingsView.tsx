@@ -27,6 +27,38 @@ const healthClass: Record<BackendHealthStatus['status'], string> = {
   unavailable: 'bg-red-50 text-red-800 border-red-200',
 };
 
+function getProviderErrorDisplay(code?: string, fallbackMessage?: string): string {
+  if (!code) return fallbackMessage || 'Provider smoke test failed.';
+  switch (code) {
+    case 'provider_not_configured':
+      return 'Not Configured — API Key is not set in backend Edge Function secrets.';
+    case 'provider_auth_failed':
+      return 'Authentication Failed — Provider API Key is invalid, expired, or rejected.';
+    case 'provider_rate_limited':
+      return 'Rate Limited — Provider quota or concurrency limit reached. Please retry shortly.';
+    case 'provider_model_unavailable':
+      return 'Model Unavailable — Configured model is unavailable or retired on upstream provider.';
+    case 'provider_timeout':
+      return 'Request Timeout — Provider took too long to complete generation.';
+    case 'provider_unavailable':
+      return 'Provider Unavailable — Upstream provider service returned 5xx or connection failed.';
+    case 'provider_invalid_output':
+      return 'Invalid Output — Provider response did not match expected structured schema.';
+    case 'provider_contract_invalid':
+      return 'Contract Invalid — Provider API payload contract has changed or polling failed.';
+    case 'asset_persist_failed':
+      return 'Storage Persistence Failed — Failed to save generated image to private campaign-assets.';
+    case 'asset_url_failed':
+      return 'Signed URL Failed — Generated image stored, but failed to create signed access URL.';
+    case 'unauthorized':
+      return 'Authentication Required — User session is expired or missing. Please sign in.';
+    case 'organization_access_denied':
+      return 'Organization Access Denied — Workspace membership is required to run provider tests.';
+    default:
+      return fallbackMessage || code.replace(/_/g, ' ');
+  }
+}
+
 interface SettingsViewProps {
   organizationId?: string;
 }
@@ -248,28 +280,83 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ organizationId }) =>
         {(geminiTestResult || nvidiaTestResult) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             {geminiTestResult && (
-              <div className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+              <div className={`p-4 rounded-xl border text-xs space-y-2 ${
                 geminiTestResult.ok
-                  ? 'bg-blue-50/80 border-blue-200 text-blue-900'
-                  : 'bg-red-50 border-red-200 text-red-800'
+                  ? 'bg-blue-50/80 border-blue-200 text-blue-950'
+                  : 'bg-red-50/80 border-red-200 text-red-950'
               }`}>
-                {geminiTestResult.ok ? <Check className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
-                <div>
-                  <div className="font-bold">Gemini Text Smoke Test: {geminiTestResult.ok ? 'PASSED' : 'FAILED'}</div>
-                  <div className="text-[11px] mt-0.5">{geminiTestResult.message}</div>
+                <div className="flex items-center justify-between">
+                  <div className="font-bold flex items-center gap-1.5">
+                    {geminiTestResult.ok ? <Check className="w-4 h-4 text-blue-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+                    <span>Gemini Text Generation: {geminiTestResult.ok ? 'WORKING' : 'FAILED'}</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/70 border border-current/20">
+                    {geminiTestResult.latencyMs ? `${geminiTestResult.latencyMs}ms` : 'Failed'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-700">
+                  {geminiTestResult.ok ? (
+                    <div className="space-y-1">
+                      <div><span className="font-semibold">Model:</span> <span className="font-mono">{geminiTestResult.model}</span></div>
+                      <div><span className="font-semibold">Response:</span> Valid structured JSON matching schema</div>
+                      <div><span className="font-semibold">Latency:</span> {geminiTestResult.latencyMs ? `${(geminiTestResult.latencyMs / 1000).toFixed(2)}s` : 'N/A'}</div>
+                    </div>
+                  ) : (
+                    <div className="text-red-800 font-medium">
+                      {getProviderErrorDisplay(geminiTestResult.error, geminiTestResult.message)}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
             {nvidiaTestResult && (
-              <div className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+              <div className={`p-4 rounded-xl border text-xs space-y-2 ${
                 nvidiaTestResult.ok
-                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
-                  : 'bg-red-50 border-red-200 text-red-800'
+                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                  : 'bg-red-50/80 border-red-200 text-red-950'
               }`}>
-                {nvidiaTestResult.ok ? <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
-                <div>
-                  <div className="font-bold">NVIDIA NIM Image Smoke Test: {nvidiaTestResult.ok ? 'PASSED' : 'FAILED'}</div>
-                  <div className="text-[11px] mt-0.5">{nvidiaTestResult.message}</div>
+                <div className="flex items-center justify-between">
+                  <div className="font-bold flex items-center gap-1.5">
+                    {nvidiaTestResult.ok ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+                    <span>NVIDIA Image Generation: {nvidiaTestResult.ok ? 'WORKING' : 'FAILED'}</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/70 border border-current/20">
+                    {nvidiaTestResult.latencyMs ? `${(nvidiaTestResult.latencyMs / 1000).toFixed(1)}s` : 'Failed'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-700">
+                  {nvidiaTestResult.ok ? (
+                    <div className="space-y-1.5">
+                      <div><span className="font-semibold">Model:</span> <span className="font-mono">{nvidiaTestResult.model}</span></div>
+                      <div><span className="font-semibold">Storage Persistence:</span> <span className="text-emerald-700 font-bold">PASS</span> (bucket: {nvidiaTestResult.storageBucket || 'campaign-assets'})</div>
+                      <div><span className="font-semibold">Latency:</span> {nvidiaTestResult.latencyMs ? `${(nvidiaTestResult.latencyMs / 1000).toFixed(1)}s` : 'N/A'}</div>
+                      {nvidiaTestResult.signedUrl && (
+                        <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={nvidiaTestResult.signedUrl}
+                              alt="Generated NVIDIA Smoke Test Thumbnail"
+                              className="w-14 h-14 object-cover rounded-lg border border-emerald-300 shadow-sm"
+                            />
+                            <div>
+                              <div className="font-semibold text-emerald-900">Rendered Thumbnail</div>
+                              <div className="text-[10px] text-slate-500 font-mono truncate max-w-[200px]">{nvidiaTestResult.storagePath || 'Persisted in campaign-assets'}</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setNvidiaTestResult(null)}
+                            className="text-[10px] px-2 py-1 bg-white border border-emerald-300 text-emerald-800 rounded hover:bg-emerald-50 transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-red-800 font-medium">
+                      {getProviderErrorDisplay(nvidiaTestResult.error, nvidiaTestResult.message)}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

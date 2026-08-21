@@ -4,7 +4,7 @@ import { Database } from '../../types/database.types';
 // Reference only the two browser-safe Supabase settings explicitly. Reading
 // the entire import.meta.env object can accidentally pull unrelated VITE_*
 // values into the client bundle.
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://csolgywkgummefnwouny.supabase.co';
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://xogeyfhddsdxawhvlcvg.supabase.co';
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 let supabaseInstance: SupabaseClient<Database> | null = null;

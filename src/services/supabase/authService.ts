@@ -40,6 +40,10 @@ export interface ProviderSmokeTestResult {
   message?: string;
   error?: string;
   bytesReceived?: number;
+  signedUrl?: string;
+  storageBucket?: string;
+  storagePath?: string;
+  storagePersisted?: boolean;
 }
 
 interface ProfileRow {
@@ -197,6 +201,7 @@ export class AuthService {
 
   /**
    * Performs an authenticated, deliberate smoke test for Gemini text or NVIDIA image generation.
+   * Tests real backend execution and private Storage persistence without revealing secret keys.
    */
   public static async testProvider(
     provider: 'gemini' | 'nvidia',
@@ -212,8 +217,8 @@ export class AuthService {
         operation: op,
         provider,
         testedAt,
-        error: 'not_configured',
-        message: 'Backend is not configured. Live smoke tests require a live backend.',
+        error: 'provider_not_configured',
+        message: 'Backend is not configured. Live smoke tests require a live Supabase backend.',
       };
     }
 
@@ -224,22 +229,83 @@ export class AuthService {
         operation: op,
         provider,
         testedAt,
-        error: 'unauthenticated',
+        error: 'unauthorized',
         message: 'Sign in to run authenticated provider smoke tests.',
       };
     }
 
-    const { data, error } = await supabase.functions.invoke('health', {
+    if (provider === 'gemini') {
+      const { data, error } = await supabase.functions.invoke('health', {
+        body: {
+          operation: 'test_gemini',
+          ...(organizationId ? { organizationId } : {}),
+          ...(modelId ? { modelId } : {}),
+        },
+      });
+
+      if (error) {
+        let code = 'provider_unavailable';
+        let message = 'Gemini smoke test failed.';
+        if (error && typeof error === 'object' && (error as any).context && typeof (error as any).context.json === 'function') {
+          try {
+            const body = await (error as any).context.json();
+            if (body && typeof body === 'object') {
+              code = typeof body.error === 'string' ? body.error : code;
+              message = typeof body.message === 'string' ? body.message : message;
+            }
+          } catch {
+            // ignore
+          }
+        } else if (error.message) {
+          message = error.message;
+        }
+        return {
+          ok: false,
+          operation: 'test_gemini',
+          provider: 'gemini',
+          testedAt,
+          error: code,
+          message,
+        };
+      }
+
+      const res = data as any;
+      return {
+        ok: res?.ok === true,
+        operation: 'test_gemini',
+        provider: 'gemini',
+        model: res?.model || modelId || 'gemini-3.5-flash-lite',
+        usable: res?.usable ?? true,
+        latencyMs: res?.latencyMs,
+        testedAt: res?.testedAt || testedAt,
+        message: res?.ok
+          ? `Gemini Text verified in ${res?.latencyMs ?? 0}ms (${res?.model || 'default'})`
+          : 'Gemini smoke test failed.',
+      };
+    }
+
+    // NVIDIA Image Provider Smoke Test via demo_provider_test
+    const startTime = Date.now();
+    const { data, error } = await supabase.functions.invoke('generate-image', {
       body: {
-        operation: op,
-        ...(organizationId ? { organizationId } : {}),
-        ...(modelId ? { modelId } : {}),
+        brief: {
+          purpose: 'hero',
+          subject: 'Clean editorial architectural photograph of a fictional modern single-family home in Arizona, daylight, no people, no text, marketing test image.',
+          aspectRatio: '1:1',
+          generationMode: 'demo_provider_test',
+        },
+        provider: 'nvidia',
+        model: modelId,
+        organizationId,
+        idempotencyKey: crypto.randomUUID(),
       },
     });
 
+    const latencyMs = Date.now() - startTime;
+
     if (error) {
       let code = 'provider_unavailable';
-      let message = 'Provider smoke test failed.';
+      let message = 'NVIDIA image smoke test failed.';
       if (error && typeof error === 'object' && (error as any).context && typeof (error as any).context.json === 'function') {
         try {
           const body = await (error as any).context.json();
@@ -255,8 +321,8 @@ export class AuthService {
       }
       return {
         ok: false,
-        operation: op,
-        provider,
+        operation: 'test_nvidia',
+        provider: 'nvidia',
         testedAt,
         error: code,
         message,
@@ -264,18 +330,24 @@ export class AuthService {
     }
 
     const res = data as any;
+    const hasSignedUrl = Boolean(res?.signedUrl);
+    const hasStorage = Boolean(res?.storageBucket && res?.storagePath);
+
     return {
-      ok: res?.ok === true,
-      operation: op,
-      provider,
-      model: res?.model,
-      usable: res?.usable ?? true,
-      latencyMs: res?.latencyMs,
-      bytesReceived: res?.bytesReceived,
-      testedAt: res?.testedAt || testedAt,
-      message: res?.ok
-        ? `${provider === 'gemini' ? 'Gemini Text' : 'NVIDIA NIM Image'} verified in ${res?.latencyMs ?? 0}ms (${res?.model || 'default model'})`
-        : 'Provider smoke test failed.',
+      ok: hasSignedUrl,
+      operation: 'test_nvidia',
+      provider: 'nvidia',
+      model: res?.model || modelId || 'default',
+      usable: true,
+      latencyMs: res?.latencyMs ?? latencyMs,
+      signedUrl: res?.signedUrl,
+      storageBucket: res?.storageBucket,
+      storagePath: res?.storagePath,
+      storagePersisted: hasStorage,
+      testedAt,
+      message: hasSignedUrl
+        ? `NVIDIA NIM image generated and persisted in ${((res?.latencyMs ?? latencyMs) / 1000).toFixed(1)}s (${res?.model || 'default'})`
+        : 'NVIDIA smoke test failed.',
     };
   }
 }
