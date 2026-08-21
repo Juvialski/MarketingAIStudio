@@ -5,7 +5,7 @@ Baseline: current `main` after the CI structural-test patch.
 ## What this patch fixes
 
 1. Bundled fictional demo images now receive a stable deployment-version query
-   (`dfv=20260821-3`) so browsers/Render do not reuse the previously broken
+   (`dfv=20260821-4`) so browsers/Render do not reuse the previously broken
    response under the unchanged `/demo/*.png` URLs.
 2. Render is instructed not to retain `/demo/*` assets in cache.
 3. Demo campaign objects are normalized on load, including copies persisted in

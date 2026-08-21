@@ -7,7 +7,7 @@
  * corrected PNGs are deployed.
  */
 
-export const DEMO_ASSET_CACHE_VERSION = '20260821-3';
+export const DEMO_ASSET_CACHE_VERSION = '20260821-4';
 
 const DEMO_PATH_PREFIX = '/demo/';
 const URL_BASE = 'https://deedforge.local';
