@@ -441,16 +441,16 @@ export function App() {
       onOpenAuth={() => setIsAuthModalOpen(true)}
       onSignOut={() => void handleSignOut()}
     >
-      <div className={`mb-5 p-3.5 sm:p-4 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
+      <div className={`mb-6 px-4 py-3 rounded-2xl border text-xs flex flex-wrap items-center justify-between gap-3 shadow-subtle ${
         runtimeMode === 'live'
-          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-          : 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
+          ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+          : 'bg-gradient-to-r from-amber-50/90 to-amber-100/40 border-amber-200 text-amber-950'
       }`}>
-        <div>
-          <span className="font-mono font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-2.5">
+          <span className="px-2.5 py-0.5 rounded-md bg-amber-200/80 text-amber-900 font-mono font-bold text-[10px] uppercase tracking-wider border border-amber-300/80">
             {runtimeMode === 'live' ? 'Live workspace' : 'DEMO WORKSPACE · FICTIONAL DATA'}
           </span>
-          <span className="ml-2">
+          <span className="text-slate-600 text-xs hidden sm:inline font-medium">
             {runtimeMode === 'live'
               ? 'Data and AI operations require an authenticated organization.'
               : 'Fictional campaigns are local fixtures and are never used as live data.'}
@@ -465,16 +465,16 @@ export function App() {
                   const phx = campaigns.find((c) => c.id === 'campaign-phoenix-fix-flip');
                   if (phx) handleSelectCampaign(phx);
                 }}
-                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Presentation className="w-3.5 h-3.5" />
+                <Presentation className="w-3.5 h-3.5 text-amber-400" />
                 <span>Open Flagship Demo</span>
               </button>
             )}
             <button
               type="button"
               onClick={handleExitDemo}
-              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-subtle"
             >
               Exit Demo
             </button>
