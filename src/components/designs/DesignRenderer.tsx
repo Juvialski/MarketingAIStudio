@@ -66,6 +66,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
   const isLetter = aspectRatio === 'flyer_letter';
   const nativeWidth = isLetter ? 1275 : isA4 ? 1240 : dimensions.width;
   const nativeHeight = isLetter ? 1650 : isA4 ? 1754 : dimensions.height;
+  const renderedFamily = isLetter || isA4 ? 'flyer' : config.templateFamily;
 
   useEffect(() => {
     if (isControlled || !containerRef.current) return;
@@ -163,6 +164,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
         data-aspect-ratio={aspectRatio}
         data-target-width={dimensions.width}
         data-target-height={dimensions.height}
+        data-template-family={renderedFamily}
         style={{
           width: `${nativeWidth}px`,
           height: `${nativeHeight}px`,

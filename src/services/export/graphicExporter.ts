@@ -32,6 +32,22 @@ export function getTargetDimensions(element: HTMLElement): ExportDimensions {
   return { width, height };
 }
 
+export function createRasterOptions(target: ExportDimensions) {
+  return {
+    canvasWidth: target.width,
+    canvasHeight: target.height,
+    pixelRatio: 1,
+    cacheBust: false,
+    skipAutoScale: true,
+    backgroundColor: '#ffffff',
+    style: {
+      transform: 'none',
+      transformOrigin: 'top left',
+      margin: '0',
+    },
+  };
+}
+
 async function waitForAssets(element: HTMLElement): Promise<void> {
   if ('fonts' in document) {
     await document.fonts.ready;
@@ -96,19 +112,7 @@ export async function renderElementToPngBlob(
 
   await waitForAssets(element);
 
-  const blob = await htmlToImage.toBlob(element, {
-    canvasWidth: target.width,
-    canvasHeight: target.height,
-    pixelRatio: 1,
-    cacheBust: false,
-    skipAutoScale: true,
-    backgroundColor: '#ffffff',
-    style: {
-      transform: 'none',
-      transformOrigin: 'top left',
-      margin: '0',
-    },
-  });
+  const blob = await htmlToImage.toBlob(element, createRasterOptions(target));
 
   if (!blob) {
     throw new Error('The export renderer returned an empty image.');
@@ -127,14 +131,18 @@ export async function renderElementToPngBlob(
 export class GraphicExporter {
   public static async exportToPng(
     elementOrId: HTMLElement | string,
-    filename: string
+    filename: string,
+    dimensions?: ExportDimensions
   ): Promise<Blob> {
-    const blob = await renderElementToPngBlob(elementOrId);
+    const blob = await renderElementToPngBlob(elementOrId, dimensions);
     saveAs(blob, filename.endsWith('.png') ? filename : `${filename}.png`);
     return blob;
   }
 
-  public static async exportToBlob(elementOrId: HTMLElement | string): Promise<Blob> {
-    return renderElementToPngBlob(elementOrId);
+  public static async exportToBlob(
+    elementOrId: HTMLElement | string,
+    dimensions?: ExportDimensions
+  ): Promise<Blob> {
+    return renderElementToPngBlob(elementOrId, dimensions);
   }
 }

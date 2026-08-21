@@ -1,12 +1,23 @@
 import { jsPDF } from 'jspdf';
 import { saveAs } from 'file-saver';
 import { FORMAT_DIMENSIONS } from '../../types/designs';
-import { renderElementToPngBlob } from './graphicExporter';
+import { ExportDimensions, renderElementToPngBlob } from './graphicExporter';
 
 export type PdfPageFormat = 'letter' | 'a4';
 
+export interface PdfPageSizePoints {
+  width: number;
+  height: number;
+}
+
 function getFormatDimensions(format: PdfPageFormat) {
   return format === 'letter' ? FORMAT_DIMENSIONS.flyer_letter : FORMAT_DIMENSIONS.flyer_a4;
+}
+
+export function getPdfPageSizePoints(format: PdfPageFormat): PdfPageSizePoints {
+  return format === 'letter'
+    ? { width: 612, height: 792 }
+    : { width: 595.28, height: 841.89 };
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -20,19 +31,21 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 
 async function createRasterPdf(
   elementOrId: HTMLElement | string,
-  format: PdfPageFormat
+  format: PdfPageFormat,
+  rasterDimensions?: ExportDimensions
 ): Promise<Blob> {
   const target = getFormatDimensions(format);
-  const pngBlob = await renderElementToPngBlob(elementOrId, {
-    width: target.width,
-    height: target.height,
-  });
+  const pngBlob = await renderElementToPngBlob(
+    elementOrId,
+    rasterDimensions || { width: target.width, height: target.height }
+  );
   const imgData = await blobToDataUrl(pngBlob);
+  const page = getPdfPageSizePoints(format);
 
   const pdf = new jsPDF({
     orientation: 'portrait',
-    unit: 'in',
-    format: format === 'letter' ? [8.5, 11] : 'a4',
+    unit: 'pt',
+    format: [page.width, page.height],
     compress: true,
   });
 
@@ -55,8 +68,9 @@ export class PdfExporter {
 
   public static async generatePdfBlob(
     elementOrId: HTMLElement | string,
-    format: PdfPageFormat = 'letter'
+    format: PdfPageFormat = 'letter',
+    rasterDimensions?: ExportDimensions
   ): Promise<Blob> {
-    return createRasterPdf(elementOrId, format);
+    return createRasterPdf(elementOrId, format, rasterDimensions);
   }
 }
