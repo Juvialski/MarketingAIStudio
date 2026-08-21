@@ -37,41 +37,82 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   return (
     <div className="space-y-8 max-w-[1500px] mx-auto">
       {/* 1. Hero Welcome Banner */}
-      <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-elevated relative overflow-hidden">
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-amber-400 text-xs font-mono">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span>{brandKit.companyName} • Marketing & Automation Studio</span>
+      <div className="bg-slate-900 text-white p-6 sm:p-10 rounded-3xl shadow-elevated relative overflow-hidden">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          {/* Left Column: Headline & Primary Actions */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-amber-400 text-xs font-mono font-medium">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>{brandKit.companyName} • Deal Marketing Platform</span>
+            </div>
+
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold tracking-tight text-white leading-tight">
+              Turn Real Estate Underwriting Into High-Impact Marketing.
+            </h1>
+
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-light max-w-xl">
+              Generate institutional-grade investment briefs, anti-slop multi-channel copy, short-form video scripts, and 300 DPI graphics from property financials in seconds.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3.5 pt-2">
+              <button
+                onClick={onNewCampaign}
+                className="px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg flex items-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>New Property Campaign</span>
+              </button>
+
+              <button
+                onClick={() => onNavigate('campaigns')}
+                className="px-6 py-3.5 bg-slate-800/90 hover:bg-slate-700 text-white text-xs sm:text-sm font-semibold rounded-xl border border-slate-700 transition-colors cursor-pointer"
+              >
+                <span>Explore Library ({campaigns.length})</span>
+              </button>
+            </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-serif font-bold tracking-tight text-white">
-            Turn Real Estate Underwriting Into High-Impact Marketing.
-          </h1>
+          {/* Right Column: Engine Highlights Panel */}
+          <div className="lg:col-span-5 bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">
+                Marketing Engine Pipeline
+              </span>
+              <span className="text-[11px] font-mono text-slate-400">
+                4-Stage Pipeline
+              </span>
+            </div>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
-            Generate multi-channel marketing campaigns, quantifiable investor copy, short-form video scripts, and deterministic 300 DPI graphics from property metrics in seconds.
-          </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800/60 space-y-1">
+                <div className="text-amber-400 font-mono font-bold text-[11px]">01 · UNDERWRITING</div>
+                <div className="font-semibold text-white">Financial Fact Truth</div>
+                <div className="text-slate-400 text-[11px]">Cap rates, IRR, spread & cash flow verification</div>
+              </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              onClick={onNewCampaign}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-2 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Property Campaign</span>
-            </button>
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800/60 space-y-1">
+                <div className="text-emerald-400 font-mono font-bold text-[11px]">02 · COPY STUDIO</div>
+                <div className="font-semibold text-white">Anti-Slop Multi-Channel</div>
+                <div className="text-slate-400 text-[11px]">LinkedIn memos, emails & 60s video reels</div>
+              </div>
 
-            <button
-              onClick={() => onNavigate('campaigns')}
-              className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
-            >
-              <span>Explore Campaign Library ({campaigns.length})</span>
-            </button>
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800/60 space-y-1">
+                <div className="text-sky-400 font-mono font-bold text-[11px]">03 · GRAPHIC FLYERS</div>
+                <div className="font-semibold text-white">300 DPI Export Suite</div>
+                <div className="text-slate-400 text-[11px]">Print PDFs, social square, story & landscape</div>
+              </div>
+
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800/60 space-y-1">
+                <div className="text-purple-400 font-mono font-bold text-[11px]">04 · REVIEW PORTAL</div>
+                <div className="font-semibold text-white">Interactive Client Deck</div>
+                <div className="text-slate-400 text-[11px]">Tokenized review link & feedback capture</div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Decorative Grid Pattern */}
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-amber-500/10 to-transparent pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-amber-500/5 to-transparent pointer-events-none" />
       </div>
 
       {/* Flagship Demo Showcase Card */}

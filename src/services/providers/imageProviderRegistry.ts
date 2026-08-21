@@ -265,10 +265,7 @@ export class ImageProviderRegistry {
     config: ProviderConfig,
     runtimeMode: 'demo' | 'live' = 'live'
   ): { providerId: ImageProviderType; modelId: string; isPaid: boolean; estimatedCostUsd: number } {
-    const requestedTier = brief.qualityTier || config.imageQualityTier || 'free_dev';
-    const paidEnabled = config.imageSpendingLimits?.enablePaidGeneration === true;
-
-    if (runtimeMode === 'demo') {
+    if (runtimeMode === 'demo' && brief.generationMode !== 'demo_provider_test') {
       return {
         providerId: 'mock',
         modelId: 'bundled-fictional-fixture',
@@ -277,7 +274,10 @@ export class ImageProviderRegistry {
       };
     }
 
-    if (requestedTier === 'free_dev' || !paidEnabled) {
+    const requestedTier = brief.qualityTier || config.imageQualityTier || 'free_dev';
+    const paidEnabled = config.imageSpendingLimits?.enablePaidGeneration === true;
+
+    if (brief.generationMode === 'demo_provider_test' || requestedTier === 'free_dev' || !paidEnabled) {
       return {
         providerId: 'nvidia',
         modelId: config.nvidiaModelId || 'stabilityai/stable-diffusion-3.5-large',

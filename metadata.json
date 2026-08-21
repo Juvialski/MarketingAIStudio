@@ -1,6 +1,6 @@
 {
-  "name": "Zaw Marketing Studio",
-  "description": "Real estate marketing and business automation platform for campaign generation, presentations, and brand kit management.",
+  "name": "DeedForge",
+  "description": "Real estate investment marketing platform turning property underwriting into high-impact campaigns, multi-channel copy, presentation decks, and client review portals.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

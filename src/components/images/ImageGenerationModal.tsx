@@ -4,13 +4,15 @@ import {
   ImageCreativeBrief, 
   ImagePurpose, 
   ImageStyle, 
-  ImageQualityTier 
+  ImageQualityTier,
+  GenerationMode
 } from '../../types/providers';
 import { BrandKit } from '../../types/brandKit';
 import { SettingsStore } from '../../services/storage/settingsStore';
 import { ImageProviderRegistry } from '../../services/providers/imageProviderRegistry';
 import { ImageSpendingTracker } from '../../services/providers/imageSpendingTracker';
 import { ImageProviderRouter } from '../../services/providers/imageProvider';
+import { isSupabaseConfigured } from '../../services/supabase/client';
 import { 
   Sparkles, 
   X, 
@@ -18,7 +20,11 @@ import {
   AlertCircle, 
   Check, 
   ShieldAlert, 
-  RefreshCw
+  RefreshCw,
+  Info,
+  Layers,
+  Zap,
+  HardDrive
 } from 'lucide-react';
 
 interface ImageGenerationModalProps {
@@ -33,6 +39,16 @@ interface ImageGenerationModalProps {
   campaignId?: string;
   organizationId?: string;
   runtimeMode?: 'demo' | 'live';
+}
+
+interface GenerationDiagnostics {
+  provider: string;
+  model?: string;
+  estimatedCostUsd: number;
+  durationMs: number;
+  storageBucket?: string;
+  storagePath?: string;
+  provenance: string;
 }
 
 export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
@@ -50,7 +66,9 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
 }) => {
   const config = SettingsStore.get();
   const spendingLimits = config.imageSpendingLimits;
+  const backendConfigured = isSupabaseConfigured();
 
+  const [demoModeChoice, setDemoModeChoice] = useState<'fixture' | 'demo_provider_test'>('fixture');
   const [purpose, setPurpose] = useState<ImagePurpose>('hero');
   const [style, setStyle] = useState<ImageStyle>('architectural_photography');
   const [qualityTier, setQualityTier] = useState<ImageQualityTier>(
@@ -62,6 +80,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [progressMsg, setProgressMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<GenerationDiagnostics | null>(null);
 
   if (!isOpen) return null;
 
@@ -72,6 +91,18 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
 
   const handleGenerate = async () => {
     setErrorMsg(null);
+    setDiagnostics(null);
+
+    const generationMode: GenerationMode = runtimeMode === 'demo'
+      ? demoModeChoice
+      : 'live';
+
+    if (runtimeMode === 'demo' && generationMode === 'demo_provider_test') {
+      if (!backendConfigured) {
+        setErrorMsg('Fresh demo generation requires a configured Supabase backend connection.');
+        return;
+      }
+    }
 
     if (runtimeMode === 'live') {
       if (!campaignId || campaignId === 'drafts') {
@@ -84,7 +115,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
       }
     }
 
-    // Enforce cost safety
+    // Enforce cost safety in live mode
     if (isPaidTier && runtimeMode === 'live') {
       const budgetCheck = ImageSpendingTracker.canExecutePaidGeneration(
         estimatedCost,
@@ -99,6 +130,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
 
     setIsGenerating(true);
     setProgressMsg('Composing creative brief...');
+    const startTime = Date.now();
 
     try {
       const brief: ImageCreativeBrief = {
@@ -106,40 +138,66 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
         subject: customSubject.trim() || `${propertyTitle} in ${targetMarket} (${propertyType.replace('_', ' ')})`,
         style,
         aspectRatio,
-        qualityTier,
+        qualityTier: generationMode === 'demo_provider_test' ? 'free_dev' : qualityTier,
         references: selectedReferenceUrls,
         brandColors: [brandKit.colors.primary, brandKit.colors.accent],
         isConceptual: true,
+        generationMode,
       };
 
       const resolved = ImageProviderRegistry.resolveProviderForBrief(brief, config, runtimeMode);
-      setProgressMsg(`Generating via ${resolved.providerId.toUpperCase()} (${resolved.modelId})...`);
+      setProgressMsg(
+        generationMode === 'fixture'
+          ? 'Loading prepackaged fictional fixture...'
+          : `Generating via ${resolved.providerId.toUpperCase()} (${resolved.modelId})...`
+      );
 
       const adapter = ImageProviderRouter.getAdapterForConfig({
         ...config,
-        imageQualityTier: qualityTier,
-      }, { campaignId, organizationId, runtimeMode });
+        imageQualityTier: generationMode === 'demo_provider_test' ? 'free_dev' : qualityTier,
+      }, { 
+        campaignId: campaignId || 'demo-campaign-preview', 
+        organizationId: organizationId || 'demo-org', 
+        runtimeMode,
+        generationMode
+      });
 
       const result = await adapter.generateFromBrief(brief, (step) => setProgressMsg(step));
+
+      const durationMs = Date.now() - startTime;
+      const isFixture = result.provider === 'demo_fixture' || result.provenance === 'fixture';
+      const isDemoTest = brief.generationMode === 'demo_provider_test';
 
       const newCampaignImg: CampaignImage = {
         id: result.id || `ai-img-${Date.now()}`,
         url: result.url,
-        name: result.provider === 'demo_fixture'
-          ? `Fictional Demo Visual: ${purpose.toUpperCase()}`
+        name: isFixture
+          ? `Bundled Demo Fixture: ${purpose.toUpperCase()}`
+          : isDemoTest
+          ? `Fresh Demo Visual: ${purpose.toUpperCase()} (${result.provider}/${result.metadata?.modelId || 'nvidia'})`
           : `AI Visual: ${purpose.toUpperCase()} (${result.provider})`,
-        source: result.provider === 'demo_fixture' ? 'sample' : 'ai_generated',
+        source: isFixture ? 'sample' : 'ai_generated',
         aspectRatio: aspectRatio === '16:9' ? 1.77 : aspectRatio === '4:5' ? 0.8 : aspectRatio === '9:16' ? 0.56 : 1.0,
         isHero: purpose === 'hero',
         isAiIllustrative: true,
         isConceptual: true,
-        estimatedCostUsd: result.costMetadata?.estimatedCostUsd || (isPaidTier ? estimatedCost : 0),
+        estimatedCostUsd: result.costMetadata?.estimatedCostUsd || (isPaidTier && runtimeMode === 'live' ? estimatedCost : 0),
         provider: result.provider,
         model: result.metadata?.modelId,
-        provenance: result.provenance,
+        provenance: isFixture ? 'fixture' : 'generated',
         storageBucket: result.storageBucket,
         storagePath: result.storagePath,
       };
+
+      setDiagnostics({
+        provider: result.provider,
+        model: result.metadata?.modelId,
+        estimatedCostUsd: newCampaignImg.estimatedCostUsd || 0,
+        durationMs,
+        storageBucket: result.storageBucket,
+        storagePath: result.storagePath,
+        provenance: newCampaignImg.provenance || 'generated',
+      });
 
       onImageGenerated(newCampaignImg);
       onClose();
@@ -158,6 +216,13 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
     );
   };
 
+  const getPrimaryButtonLabel = () => {
+    if (runtimeMode === 'demo') {
+      return demoModeChoice === 'fixture' ? 'Use Bundled Demo' : 'Generate Fresh Demo Visual';
+    }
+    return 'Generate Visual Asset';
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
       <div
@@ -173,11 +238,21 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
               <span className="text-[10px] font-mono uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold">
                 VISUAL CONCEPT ENGINE
               </span>
-              {isPaidTier && (
-                <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" />
-                  Est. ~${estimatedCost.toFixed(2)}
+              {runtimeMode === 'demo' ? (
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-semibold ${
+                  demoModeChoice === 'fixture'
+                    ? 'bg-slate-100 text-slate-700 border-slate-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}>
+                  {demoModeChoice === 'fixture' ? 'OFFLINE SAFE' : 'PROVIDER TEST'}
                 </span>
+              ) : (
+                isPaidTier && (
+                  <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    Est. ~${estimatedCost.toFixed(2)}
+                  </span>
+                )
               )}
             </div>
             <h3 id="image-generation-title" className="text-lg font-serif font-bold text-slate-900 mt-1">
@@ -195,79 +270,154 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-700">
-          {/* 1. Quality Tier Selector */}
-          <div>
-            <label className="font-bold text-slate-900 block mb-1.5 flex items-center justify-between">
-              <span>Image Quality Tier</span>
-              {!isPaidAllowed && (
-                <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Paid Generation Disabled in Settings
-                </span>
-              )}
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                {
-                  id: 'free_dev',
-                  label: 'Free / Prototype',
-                  provider: runtimeMode === 'demo' ? 'Bundled Fictional Demo Fixture' : 'NVIDIA NIM (Free Dev Tier)',
-                  cost: 'Free ($0.00)',
-                  badge: runtimeMode === 'demo' ? 'DEMO' : 'FREE',
-                  badgeColor: runtimeMode === 'demo' ? 'bg-slate-100 text-slate-700' : 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-                },
-                {
-                  id: 'paid_standard',
-                  label: 'Production Standard',
-                  provider: 'FLUX.2 Pro',
-                  cost: 'from ~$0.03 / img',
-                  badge: 'PAID',
-                  badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-                  disabled: !isPaidAllowed,
-                },
-                {
-                  id: 'paid_maximum',
-                  label: 'Maximum Quality (Hero)',
-                  provider: 'FLUX.2 Max',
-                  cost: 'from ~$0.07 / img',
-                  badge: 'PREMIUM',
-                  badgeColor: 'bg-purple-50 text-purple-700 border border-purple-200',
-                  disabled: !isPaidAllowed,
-                },
-                {
-                  id: 'paid_alternate',
-                  label: 'Multimodal Grounding',
-                  provider: 'Gemini Image (Not enabled on this deployment)',
-                  cost: 'Unavailable',
-                  badge: 'DISABLED',
-                  badgeColor: 'bg-slate-100 text-slate-400',
-                  disabled: true,
-                },
-              ].map((tier) => (
+          {/* 1. Mode / Quality Tier Selector */}
+          {runtimeMode === 'demo' ? (
+            <div>
+              <label className="font-bold text-slate-900 block mb-1.5 flex items-center justify-between">
+                <span>Demo Execution Mode</span>
+                <span className="text-[10px] text-slate-500 font-mono">Select fixture or live test</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Option 1: Bundled Demo Fixture */}
                 <button
-                  key={tier.id}
                   type="button"
-                  onClick={() => !tier.disabled && setQualityTier(tier.id as ImageQualityTier)}
-                  disabled={tier.disabled}
-                  className={`p-3 rounded-xl border text-left transition-all relative ${
-                    qualityTier === tier.id
+                  onClick={() => setDemoModeChoice('fixture')}
+                  className={`p-3.5 rounded-xl border text-left transition-all relative ${
+                    demoModeChoice === 'fixture'
                       ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
-                      : tier.disabled
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-slate-600" />
+                      Bundled Demo Fixture
+                    </span>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
+                      OFFLINE SAFE
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">Uses prepackaged fictional example image</div>
+                  <div className="text-[10px] font-mono text-slate-700 font-semibold mt-1">Instant / $0.00</div>
+                </button>
+
+                {/* Option 2: Fresh Demo Generation */}
+                <button
+                  type="button"
+                  onClick={() => setDemoModeChoice('demo_provider_test')}
+                  disabled={!backendConfigured}
+                  className={`p-3.5 rounded-xl border text-left transition-all relative ${
+                    demoModeChoice === 'demo_provider_test'
+                      ? 'border-amber-600 bg-amber-50/60 ring-1 ring-amber-600'
+                      : !backendConfigured
                       ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
                       : 'border-slate-200 hover:border-slate-300 bg-white'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-900">{tier.label}</span>
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${tier.badgeColor}`}>
-                      {tier.badge}
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-600" />
+                      Fresh Demo Generation
+                    </span>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                      PROVIDER TEST
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500">{tier.provider}</div>
-                  <div className="text-[10px] font-mono text-slate-700 font-semibold mt-1">{tier.cost}</div>
+                  <div className="text-[11px] text-slate-500">Tests live provider pipeline using fictional data</div>
+                  <div className="text-[10px] font-mono text-slate-700 font-semibold mt-1">
+                    Free ($0.00) · NVIDIA NIM
+                  </div>
+                  {!backendConfigured && (
+                    <div className="text-[10px] text-amber-700 mt-1 font-medium flex items-center gap-1">
+                      <Info className="w-3 h-3" /> Requires backend connection
+                    </div>
+                  )}
                 </button>
-              ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className="font-bold text-slate-900 block mb-1.5 flex items-center justify-between">
+                <span>Image Quality Tier</span>
+                {!isPaidAllowed && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    Paid Generation Disabled in Settings
+                  </span>
+                )}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  {
+                    id: 'free_dev',
+                    label: 'Free / Dev Tier',
+                    provider: 'NVIDIA NIM (Free Dev Tier)',
+                    cost: 'Free ($0.00)',
+                    badge: 'FREE',
+                    badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                  },
+                  {
+                    id: 'paid_standard',
+                    label: 'Production Standard',
+                    provider: 'FLUX.2 Pro',
+                    cost: 'from ~$0.03 / img',
+                    badge: 'PAID',
+                    badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                    disabled: !isPaidAllowed,
+                  },
+                  {
+                    id: 'paid_maximum',
+                    label: 'Maximum Quality (Hero)',
+                    provider: 'FLUX.2 Max',
+                    cost: 'from ~$0.07 / img',
+                    badge: 'PREMIUM',
+                    badgeColor: 'bg-purple-50 text-purple-700 border border-purple-200',
+                    disabled: !isPaidAllowed,
+                  },
+                  {
+                    id: 'paid_specialized',
+                    label: 'Specialized Control',
+                    provider: 'FLUX.2 Flex',
+                    cost: 'from ~$0.05 / img',
+                    badge: 'FLEX',
+                    badgeColor: 'bg-blue-50 text-blue-700 border border-blue-200',
+                    disabled: !isPaidAllowed,
+                  },
+                  {
+                    id: 'paid_alternate',
+                    label: 'Multimodal Grounding',
+                    provider: 'Gemini Image (Not enabled on this deployment)',
+                    cost: 'Unavailable',
+                    badge: 'DISABLED',
+                    badgeColor: 'bg-slate-100 text-slate-400',
+                    disabled: true,
+                  },
+                ].map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => !tier.disabled && setQualityTier(tier.id as ImageQualityTier)}
+                    disabled={tier.disabled}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${
+                      qualityTier === tier.id
+                        ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                        : tier.disabled
+                        ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-slate-900">{tier.label}</span>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${tier.badgeColor}`}>
+                        {tier.badge}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">{tier.provider}</div>
+                    <div className="text-[10px] font-mono text-slate-700 font-semibold mt-1">{tier.cost}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 2. Visual Purpose & Aspect Ratio */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -371,6 +521,25 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
             </p>
           </div>
 
+          {/* Diagnostic Card (if available) */}
+          {diagnostics && (
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-1 text-[11px] font-mono text-slate-700">
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-slate-600" />
+                Generation Diagnostics Summary
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-slate-600">
+                <div>Provider: <span className="font-semibold text-slate-900">{diagnostics.provider}</span></div>
+                <div>Model: <span className="font-semibold text-slate-900">{diagnostics.model || 'default'}</span></div>
+                <div>Duration: <span className="font-semibold text-slate-900">{diagnostics.durationMs}ms</span></div>
+                <div>Est. Cost: <span className="font-semibold text-slate-900">${diagnostics.estimatedCostUsd.toFixed(3)}</span></div>
+                {diagnostics.storageBucket && (
+                  <div className="col-span-2">Storage: <span className="font-semibold text-slate-900">{diagnostics.storageBucket}/{diagnostics.storagePath}</span></div>
+                )}
+              </div>
+            </div>
+          )}
+
           {errorMsg && (
             <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
@@ -382,12 +551,16 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
         {/* Footer */}
         <div className="p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
           <div className="text-[11px] text-slate-500">
-            {isPaidTier ? (
+            {runtimeMode === 'demo' ? (
+              demoModeChoice === 'fixture' ? (
+                <span className="text-slate-600 font-medium">Bundled Fictional Demo Fixture ($0.00)</span>
+              ) : (
+                <span className="text-amber-800 font-medium">Fresh Demo Generation (NVIDIA NIM · $0.00)</span>
+              )
+            ) : isPaidTier ? (
               <span className="font-mono text-slate-700 font-semibold">
                 Est. Cost: ~${estimatedCost.toFixed(2)} · {qualityTier.replace('_', ' ').toUpperCase()}
               </span>
-            ) : runtimeMode === 'demo' ? (
-              <span className="text-slate-600 font-medium">Bundled Fictional Demo Fixture ($0.00)</span>
             ) : (
               <span className="text-slate-600 font-medium">Free Development Tier (NVIDIA NIM · $0.00)</span>
             )}
@@ -405,7 +578,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || (runtimeMode === 'demo' && demoModeChoice === 'demo_provider_test' && !backendConfigured)}
               className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50"
             >
               {isGenerating ? (
@@ -416,7 +589,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Generate Visual Asset</span>
+                  <span>{getPrimaryButtonLabel()}</span>
                 </>
               )}
             </button>
@@ -426,3 +599,4 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
     </div>
   );
 };
+

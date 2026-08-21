@@ -1,5 +1,6 @@
 import {
   GeneratedImageResult,
+  GenerationMode,
   IImageProvider,
   ImageCreativeBrief,
   ProviderConfig,
@@ -71,6 +72,7 @@ export interface EdgeImageContext {
   campaignId?: string;
   organizationId?: string;
   runtimeMode?: 'demo' | 'live';
+  generationMode?: GenerationMode;
 }
 
 export async function extractEdgeErrorMessage(error: any): Promise<{ code: string; message: string }> {
@@ -243,6 +245,19 @@ export class ImageProviderRouter {
     context: EdgeImageContext = {}
   ): IImageProvider {
     const runtimeMode = context.runtimeMode ?? config.runtimeMode ?? 'live';
+    const isProviderTest = context.generationMode === 'demo_provider_test';
+
+    if (isProviderTest) {
+      if (!isSupabaseConfigured()) {
+        throw new Error('Fresh demo generation requires a configured Supabase backend connection.');
+      }
+      return new SupabaseEdgeImageProvider(config, {
+        ...context,
+        campaignId: context.campaignId || 'demo-campaign-preview',
+        organizationId: context.organizationId || 'demo-org',
+      });
+    }
+
     if (runtimeMode === 'demo') {
       return new UploadOnlyProvider();
     }

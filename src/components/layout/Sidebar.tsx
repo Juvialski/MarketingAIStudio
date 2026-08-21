@@ -33,20 +33,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div>
         <div className="p-3 md:p-6 border-b border-slate-800 flex items-center justify-center md:justify-start gap-3">
           <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-black text-sm shadow-md">
-            Z
+            D
           </div>
           <div className="hidden md:block min-w-0 flex-1">
             <h1 className="text-xs font-bold text-white uppercase tracking-wider font-mono truncate">
-              Zaw Studio
+              DeedForge
             </h1>
             <p className="text-[10px] text-slate-400 font-mono truncate">
-              Real Estate Automation
+              Deal Marketing Platform
             </p>
           </div>
         </div>
 
         {/* Navigation Items */}
-        <nav className="p-2 md:p-4 space-y-1">
+        <nav className="p-2.5 md:p-4 space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
@@ -56,13 +56,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onNavigate(item.id)}
                 aria-label={item.label}
                 title={item.label}
-                className={`w-full flex items-center justify-center md:justify-start gap-3 px-2 md:px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center justify-center md:justify-start gap-3 px-2.5 md:px-4 py-3 rounded-xl text-xs md:text-sm font-semibold transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                 }`}
               >
-                <Icon className="w-4 h-4 shrink-0" />
+                <Icon className={`w-4 h-4 md:w-4.5 md:h-4.5 shrink-0 ${isActive ? 'text-slate-950 stroke-[2.5]' : 'text-slate-400'}`} />
                 <span className="hidden md:inline">{item.label}</span>
               </button>
             );

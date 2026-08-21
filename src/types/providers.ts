@@ -109,6 +109,8 @@ export type ImageStyle =
   | 'aerial_submarket'
   | 'minimalist_luxury';
 
+export type GenerationMode = 'fixture' | 'demo_provider_test' | 'live';
+
 export interface ImageCreativeBrief {
   purpose: ImagePurpose;
   subject: string;
@@ -120,6 +122,7 @@ export interface ImageCreativeBrief {
   constraints?: string;
   qualityTier?: ImageQualityTier;
   isConceptual?: boolean;
+  generationMode?: GenerationMode;
 }
 
 export interface ImageCostMetadata {

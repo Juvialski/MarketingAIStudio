@@ -16,8 +16,8 @@ import { ServiceError } from './serviceError';
 
 const isDemoContext = (organizationId?: string, campaignId?: string): boolean => {
   if (!isSupabaseConfigured()) return true;
-  if (!organizationId || organizationId === 'demo-org' || organizationId.startsWith('demo-')) return true;
-  if (campaignId && (campaignId.startsWith('campaign-') || campaignId.startsWith('demo-'))) return true;
+  if (!organizationId || organizationId === 'demo-org' || organizationId.startsWith('demo-') || organizationId.startsWith('test-')) return true;
+  if (campaignId && (campaignId.startsWith('campaign-') || campaignId.startsWith('demo-') || campaignId.startsWith('test-') || campaignId.startsWith('camp-'))) return true;
   return false;
 };
 

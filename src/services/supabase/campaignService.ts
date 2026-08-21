@@ -101,6 +101,13 @@ const hydrateSignedAssetUrls = async (campaign: Campaign): Promise<Campaign> => 
 };
 
 export class CampaignService {
+  private static isDemoContext(organizationId?: string, campaignId?: string): boolean {
+    if (!isSupabaseConfigured()) return true;
+    if (!organizationId || organizationId === 'demo-org' || organizationId.startsWith('demo-') || organizationId.startsWith('test-')) return true;
+    if (campaignId && (campaignId.startsWith('campaign-') || campaignId.startsWith('demo-') || campaignId.startsWith('test-') || campaignId.startsWith('camp-'))) return true;
+    return false;
+  }
+
   private static requireOrganization(organizationId: string): void {
     if (!organizationId) {
       throw new ServiceError('forbidden', 'A live organization is required for this operation.');
@@ -108,7 +115,7 @@ export class CampaignService {
   }
 
   public static async getCampaigns(organizationId: string): Promise<Campaign[]> {
-    if (!isSupabaseConfigured()) {
+    if (this.isDemoContext(organizationId)) {
       return CampaignStore.getAll({ allowDemoFixtures: true });
     }
     this.requireOrganization(organizationId);
@@ -128,7 +135,7 @@ export class CampaignService {
   }
 
   public static async getCampaignById(id: string, organizationId?: string): Promise<Campaign | null> {
-    if (!isSupabaseConfigured()) {
+    if (this.isDemoContext(organizationId, id)) {
       return CampaignStore.getById(id, { allowDemoFixtures: true }) || null;
     }
     if (!id) throw new ServiceError('not_found', 'A campaign ID is required.');
@@ -209,8 +216,8 @@ export class CampaignService {
     draft: Campaign,
     userId?: string
   ): Promise<Campaign> {
-    if (!isSupabaseConfigured()) {
-      const localCampaign = { ...draft, id: localId() };
+    if (this.isDemoContext(organizationId, draft.id)) {
+      const localCampaign = { ...draft, id: draft.id || localId() };
       return CampaignStore.save(localCampaign, { allowDemoFixtures: true });
     }
     this.requireOrganization(organizationId);
@@ -239,7 +246,7 @@ export class CampaignService {
     userId?: string
   ): Promise<Campaign> {
     if (!campaign.id) throw new ServiceError('not_found', 'A campaign ID is required for an update.');
-    if (!isSupabaseConfigured()) return CampaignStore.save(campaign, { allowDemoFixtures: true });
+    if (this.isDemoContext(organizationId, campaign.id)) return CampaignStore.save(campaign, { allowDemoFixtures: true });
     this.requireOrganization(organizationId);
 
     const { data, error } = await supabase
@@ -275,7 +282,7 @@ export class CampaignService {
   }
 
   public static async deleteCampaign(id: string, organizationId?: string): Promise<void> {
-    if (!isSupabaseConfigured()) {
+    if (this.isDemoContext(organizationId, id)) {
       CampaignStore.delete(id);
       return;
     }

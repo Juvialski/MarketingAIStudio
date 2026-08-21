@@ -217,13 +217,13 @@ export const CopyWorkspace: React.FC<CopyWorkspaceProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as PlatformTab)}
-              className={`px-4 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+              className={`px-4 sm:px-5 py-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
                 isActive
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  ? 'border-slate-900 text-slate-950 font-bold'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className={`w-4 h-4 ${isActive ? 'text-amber-500' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
             </button>
           );
