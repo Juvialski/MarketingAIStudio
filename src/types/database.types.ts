@@ -94,6 +94,10 @@ export interface Database {
           tagline: string | null;
           logo_url: string | null;
           logo_dark_url: string | null;
+          logo_storage_bucket: string | null;
+          logo_storage_path: string | null;
+          logo_dark_storage_bucket: string | null;
+          logo_dark_storage_path: string | null;
           website: string | null;
           phone: string | null;
           email: string | null;
@@ -117,6 +121,10 @@ export interface Database {
           tagline?: string | null;
           logo_url?: string | null;
           logo_dark_url?: string | null;
+          logo_storage_bucket?: string | null;
+          logo_storage_path?: string | null;
+          logo_dark_storage_bucket?: string | null;
+          logo_dark_storage_path?: string | null;
           website?: string | null;
           phone?: string | null;
           email?: string | null;
@@ -136,10 +144,14 @@ export interface Database {
           id?: string;
           organization_id?: string;
           is_default?: boolean;
-          company_name?: string;
+          company_name: string;
           tagline?: string | null;
           logo_url?: string | null;
           logo_dark_url?: string | null;
+          logo_storage_bucket?: string | null;
+          logo_storage_path?: string | null;
+          logo_dark_storage_bucket?: string | null;
+          logo_dark_storage_path?: string | null;
           website?: string | null;
           phone?: string | null;
           email?: string | null;

@@ -78,12 +78,20 @@ export interface SanitizedCopyChannel {
   characterCount?: number;
 }
 
+export interface AssetStorageRef {
+  assetId?: string;
+  storageBucket: string;
+  storagePath: string;
+  mimeType?: string;
+}
+
 export interface ReviewSnapshot {
   campaignId?: string;
   campaignTitle: string;
   campaignType: CampaignType;
   targetMarket: string;
   heroImageUrl: string;
+  heroImageRef?: AssetStorageRef;
   property?: {
     address: string;
     city: string;
@@ -114,6 +122,8 @@ export interface ReviewSnapshot {
     tagline?: string;
     logoUrl?: string;
     logoDarkUrl?: string;
+    logoRef?: AssetStorageRef;
+    logoDarkRef?: AssetStorageRef;
     website?: string;
     phone?: string;
     email?: string;

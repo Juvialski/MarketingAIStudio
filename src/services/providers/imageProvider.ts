@@ -222,14 +222,16 @@ export class SupabaseEdgeImageProvider implements IImageProvider {
     }
 
     onProgress?.('Image persisted to private workspace storage.', 100);
+    const assetId = data.assetId || data.asset?.id;
     return {
-      id: data.asset?.id || data.assetId || `server-image-${Date.now()}`,
+      id: assetId || `server-image-${Date.now()}`,
+      assetId,
       url,
       altText: `${brief.purpose} conceptual image — ${brief.subject}`,
       isAiIllustrative: data.isAiIllustrative ?? true,
       provider: data.provider || resolved.providerId,
       provenance: data.provenance || 'generated',
-      storageBucket: data.storageBucket,
+      storageBucket: data.storageBucket || 'campaign-assets',
       storagePath: data.storagePath || data.asset?.storagePath,
       costMetadata: {
         estimatedCostUsd: data.estimatedCostUsd || 0,

@@ -170,6 +170,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
 
       const newCampaignImg: CampaignImage = {
         id: result.id || `ai-img-${Date.now()}`,
+        assetId: result.assetId || (result.id && !result.id.startsWith('ai-img-') ? result.id : undefined),
         url: result.url,
         name: isFixture
           ? `Bundled Demo Fixture: ${purpose.toUpperCase()}`

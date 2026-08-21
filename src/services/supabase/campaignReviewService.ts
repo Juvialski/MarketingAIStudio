@@ -391,7 +391,42 @@ export class CampaignReviewService {
       return CampaignReviewStore.getPublicSnapshot(rawToken);
     }
 
-    // Public RPC: sends raw token over HTTPS; RPC performs server-side SHA-256 digest lookup
+    // 1. Try Edge Function for authenticated server-side asset hydration
+    try {
+      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-public-review', {
+        body: { rawToken: rawToken.trim() },
+      });
+
+      if (!edgeError && edgeData) {
+        const res = edgeData as any;
+        if (res.status !== 'active') {
+          return { status: res.status, error: res.error };
+        }
+
+        return {
+          status: 'active',
+          versionNumber: res.version_number ?? res.versionNumber,
+          versionTitle: res.version_title ?? res.versionTitle,
+          publishedAt: res.published_at ?? res.publishedAt,
+          snapshot: res.snapshot,
+          permissions: res.permissions,
+          feedback: (res.feedback || []).map((f: any) => ({
+            id: f.id,
+            reviewLinkId: '',
+            materialKey: f.material_key ?? f.materialKey,
+            variantKey: f.variant_key ?? f.variantKey,
+            reviewerName: f.reviewer_name ?? f.reviewerName ?? 'Reviewer',
+            status: f.status,
+            comment: f.comment,
+            updatedAt: f.updated_at ?? f.updatedAt,
+          })),
+        };
+      }
+    } catch {
+      // Fall through to public RPC lookup
+    }
+
+    // 2. Direct Public RPC fallback
     const { data, error } = await supabase.rpc('get_public_review_snapshot', {
       p_raw_token: rawToken.trim(),
     });

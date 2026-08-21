@@ -11,7 +11,11 @@ import { PresentationDeck } from '../../types/presentation';
 import { CampaignStore } from '../storage/campaignStore';
 import { Database, Json } from '../../types/database.types';
 import { ServiceError } from './serviceError';
-import { StorageBucket, StorageService } from './storageService';
+
+import {
+  hydrateCampaignAssets,
+  sanitizeCampaignForPersistence,
+} from './assetResolver';
 
 type CampaignRow = Database['public']['Tables']['campaigns']['Row'];
 type CampaignInsert = Database['public']['Tables']['campaigns']['Insert'];
@@ -35,18 +39,21 @@ const toPayload = (
   organizationId: string,
   campaign: Campaign,
   userId?: string
-): CampaignInsert => ({
-  organization_id: organizationId,
-  created_by: userId || null,
-  name: campaign.name,
-  campaign_type: campaign.sourceData.campaignType,
-  target_market: campaign.sourceData.targetMarket,
-  status: campaign.status,
-  source_data: asJson(campaign.sourceData),
-  strategy: campaign.strategy ? asJson(campaign.strategy) : null,
-  design_configs: asJson(campaign.designConfigs),
-  tags: campaign.tags || [],
-});
+): CampaignInsert => {
+  const sanitized = sanitizeCampaignForPersistence(campaign);
+  return {
+    organization_id: organizationId,
+    created_by: userId || null,
+    name: sanitized.name,
+    campaign_type: sanitized.sourceData.campaignType,
+    target_market: sanitized.sourceData.targetMarket,
+    status: sanitized.status,
+    source_data: asJson(sanitized.sourceData),
+    strategy: sanitized.strategy ? asJson(sanitized.strategy) : null,
+    design_configs: asJson(sanitized.designConfigs),
+    tags: sanitized.tags || [],
+  };
+};
 
 const toUpdatePayload = (
   organizationId: string,
@@ -81,23 +88,7 @@ const mapRowToCampaign = (row: CampaignQueryRow): Campaign => {
 };
 
 const hydrateSignedAssetUrls = async (campaign: Campaign): Promise<Campaign> => {
-  const uploadedImages = await Promise.all(
-    campaign.sourceData.uploadedImages.map(async (image) => {
-      if (!image.storageBucket || !image.storagePath) return image;
-      try {
-        const url = await StorageService.getSignedUrl(
-          image.storageBucket as StorageBucket,
-          image.storagePath
-        );
-        return { ...image, url };
-      } catch {
-        // Preserve canonical identity and let the UI show its normal broken/
-        // unavailable asset state rather than substituting fictional media.
-        return { ...image, url: '' };
-      }
-    })
-  );
-  return { ...campaign, sourceData: { ...campaign.sourceData, uploadedImages } };
+  return hydrateCampaignAssets(campaign);
 };
 
 export class CampaignService {

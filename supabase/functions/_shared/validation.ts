@@ -73,6 +73,10 @@ export const healthRequestSchema = z.object({
   modelId: boundedText(160).optional(),
 }).strict();
 
+export const publicReviewRequestSchema = z.object({
+  rawToken: boundedText(256),
+}).strict();
+
 export async function parseBody<TSchema extends z.ZodTypeAny>(
   req: Request,
   schema: TSchema,

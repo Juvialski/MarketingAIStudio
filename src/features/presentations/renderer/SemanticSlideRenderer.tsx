@@ -22,6 +22,7 @@ import Slide from '../bolt/Slide';
 import { CreativeShowcaseSlide } from './CreativeShowcaseSlide';
 import { VideoConceptSlide } from './VideoConceptSlide';
 import { CheckCircle2, AlertCircle, ShieldAlert, Mail, Phone, Globe, Award } from 'lucide-react';
+import { resolveDemoAssetUrl } from '../../../utils/demoAssets';
 
 interface SemanticSlideRendererProps {
   slide: PresentationSlide;
@@ -38,11 +39,16 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
 
   switch (slide.type) {
     case 'cover': {
-      const heroImage =
-        slide.imageUrl ||
-        (slide.imageId && campaign?.sourceData.uploadedImages.find((img) => img.id === slide.imageId)?.url) ||
-        campaign?.sourceData.uploadedImages.find((img) => img.isHero)?.url ||
-        campaign?.sourceData.uploadedImages[0]?.url;
+      const matchedImage =
+        (slide.imageId &&
+          campaign?.sourceData.uploadedImages.find(
+            (img) => img.id === slide.imageId || img.assetId === slide.imageId
+          )) ||
+        campaign?.sourceData.uploadedImages.find((img) => img.isHero) ||
+        campaign?.sourceData.uploadedImages[0];
+
+      const rawHeroImage = slide.imageUrl || matchedImage?.url;
+      const heroImage = rawHeroImage ? resolveDemoAssetUrl(rawHeroImage) || rawHeroImage : undefined;
 
       const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
 
@@ -110,10 +116,15 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'property_overview': {
-      const propertyImage =
-        slide.imageUrl ||
-        (slide.imageId && campaign?.sourceData.uploadedImages.find((img) => img.id === slide.imageId)?.url) ||
-        campaign?.sourceData.uploadedImages[0]?.url;
+      const matchedImage =
+        (slide.imageId &&
+          campaign?.sourceData.uploadedImages.find(
+            (img) => img.id === slide.imageId || img.assetId === slide.imageId
+          )) ||
+        campaign?.sourceData.uploadedImages[0];
+
+      const rawPropertyImage = slide.imageUrl || matchedImage?.url;
+      const propertyImage = rawPropertyImage ? resolveDemoAssetUrl(rawPropertyImage) || rawPropertyImage : undefined;
 
       const titleAlign = resolveTitleAlign(slide.textStyle, 'left');
 
@@ -420,12 +431,20 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
 
       if (slide.layout === 'split' && slide.items[0]) {
         const item = slide.items[0];
+        const matched = item.imageId
+          ? campaign?.sourceData.uploadedImages.find(
+              (img) => img.id === item.imageId || img.assetId === item.imageId
+            )
+          : undefined;
+        const rawUrl = item.imageUrl || matched?.url || '';
+        const resolvedItemUrl = rawUrl ? resolveDemoAssetUrl(rawUrl) || rawUrl : '';
+
         return (
           <Split
             kicker={slide.kicker || 'Property Gallery'}
             title={slide.title}
             body={item.caption || item.title}
-            media={<img src={item.imageUrl} alt={item.title || 'Property view'} />}
+            media={<img src={resolvedItemUrl} alt={item.title || 'Property view'} />}
             nav={slide.navLabel || 'Gallery'}
             notes={slide.speakerNotes}
             titleAlign={titleAlign}
@@ -434,13 +453,23 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
         );
       }
 
-      const tiles: BentoTile[] = slide.items.map((it) => ({
-        img: it.imageUrl,
-        k: it.title,
-        body: it.caption,
-        c: it.span || 4,
-        r: 1,
-      }));
+      const tiles: BentoTile[] = slide.items.map((it) => {
+        const matched = it.imageId
+          ? campaign?.sourceData.uploadedImages.find(
+              (img) => img.id === it.imageId || img.assetId === it.imageId
+            )
+          : undefined;
+        const rawUrl = it.imageUrl || matched?.url || '';
+        const resolvedItemUrl = rawUrl ? resolveDemoAssetUrl(rawUrl) || rawUrl : '';
+
+        return {
+          img: resolvedItemUrl,
+          k: it.title,
+          body: it.caption,
+          c: it.span || 4,
+          r: 1,
+        };
+      });
 
       return (
         <Bento

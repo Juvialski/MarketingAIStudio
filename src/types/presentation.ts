@@ -75,6 +75,8 @@ export interface CoverSlide extends BaseSlide {
   subtitle?: string;
   imageId?: string;
   imageUrl?: string;
+  storageBucket?: string;
+  storagePath?: string;
   foot?: string;
 }
 
@@ -98,6 +100,8 @@ export interface PropertyOverviewSlide extends BaseSlide {
   highlights: string[];
   imageId?: string;
   imageUrl?: string;
+  storageBucket?: string;
+  storagePath?: string;
 }
 
 export interface InvestmentThesisSlide extends BaseSlide {
@@ -167,7 +171,9 @@ export interface TimelineSlide extends BaseSlide {
 
 export interface GallerySlideItem {
   imageId?: string;
-  imageUrl: string;
+  imageUrl?: string;
+  storageBucket?: string;
+  storagePath?: string;
   caption?: string;
   title?: string;
   span?: number; // 4, 6, 8, 12 in 12-col bento

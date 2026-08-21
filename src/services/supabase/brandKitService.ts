@@ -4,6 +4,11 @@ import { BrandKitStore } from '../storage/brandKitStore';
 import { Database, Json } from '../../types/database.types';
 import { ServiceError } from './serviceError';
 
+import {
+  hydrateBrandKitAssets,
+  sanitizeBrandKitForPersistence,
+} from './assetResolver';
+
 type BrandKitRow = Database['public']['Tables']['brand_kits']['Row'];
 type BrandKitInsert = Database['public']['Tables']['brand_kits']['Insert'];
 type BrandKitUpdate = Database['public']['Tables']['brand_kits']['Update'];
@@ -21,6 +26,10 @@ const mapRowToBrandKit = (row: BrandKitRow): BrandKit => ({
   tagline: row.tagline || undefined,
   logoUrl: row.logo_url || undefined,
   logoDarkUrl: row.logo_dark_url || undefined,
+  logoStorageBucket: row.logo_storage_bucket || undefined,
+  logoStoragePath: row.logo_storage_path || undefined,
+  logoDarkStorageBucket: row.logo_dark_storage_bucket || undefined,
+  logoDarkStoragePath: row.logo_dark_storage_path || undefined,
   website: row.website || '',
   phone: row.phone || '',
   email: row.email || '',
@@ -36,25 +45,32 @@ const mapRowToBrandKit = (row: BrandKitRow): BrandKit => ({
     (row.image_style_preference as BrandKit['imageStylePreference']) || 'authentic_photos_first',
 });
 
-const toPayload = (organizationId: string, brandKit: BrandKit): BrandKitInsert => ({
-  organization_id: organizationId,
-  company_name: brandKit.companyName,
-  tagline: brandKit.tagline || null,
-  logo_url: brandKit.logoUrl || null,
-  logo_dark_url: brandKit.logoDarkUrl || null,
-  website: brandKit.website || null,
-  phone: brandKit.phone || null,
-  email: brandKit.email || null,
-  license_number: brandKit.licenseNumber || null,
-  colors: brandKit.colors as unknown as Json,
-  typography: brandKit.typography as unknown as Json,
-  tone_of_voice: brandKit.toneOfVoice,
-  target_audience_default: brandKit.targetAudienceDefault,
-  preferred_cta: brandKit.preferredCta,
-  required_disclaimer: brandKit.requiredDisclaimer,
-  forbidden_words: brandKit.forbiddenWords,
-  image_style_preference: brandKit.imageStylePreference,
-});
+const toPayload = (organizationId: string, brandKit: BrandKit): BrandKitInsert => {
+  const sanitized = sanitizeBrandKitForPersistence(brandKit);
+  return {
+    organization_id: organizationId,
+    company_name: sanitized.companyName,
+    tagline: sanitized.tagline || null,
+    logo_url: sanitized.logoUrl || null,
+    logo_dark_url: sanitized.logoDarkUrl || null,
+    logo_storage_bucket: sanitized.logoStorageBucket || null,
+    logo_storage_path: sanitized.logoStoragePath || null,
+    logo_dark_storage_bucket: sanitized.logoDarkStorageBucket || null,
+    logo_dark_storage_path: sanitized.logoDarkStoragePath || null,
+    website: sanitized.website || null,
+    phone: sanitized.phone || null,
+    email: sanitized.email || null,
+    license_number: sanitized.licenseNumber || null,
+    colors: sanitized.colors as unknown as Json,
+    typography: sanitized.typography as unknown as Json,
+    tone_of_voice: sanitized.toneOfVoice,
+    target_audience_default: sanitized.targetAudienceDefault,
+    preferred_cta: sanitized.preferredCta,
+    required_disclaimer: sanitized.requiredDisclaimer,
+    forbidden_words: sanitized.forbiddenWords,
+    image_style_preference: sanitized.imageStylePreference,
+  };
+};
 
 const toUpdatePayload = (organizationId: string, brandKit: BrandKit): BrandKitUpdate => {
   const payload = toPayload(organizationId, brandKit);
@@ -79,7 +95,9 @@ export class BrandKitService {
     if (error) {
       throw new ServiceError('query_failed', 'Unable to load the organization brand kit.', error);
     }
-    return data ? mapRowToBrandKit(data as BrandKitRow) : null;
+    if (!data) return null;
+    const mapped = mapRowToBrandKit(data as BrandKitRow);
+    return hydrateBrandKitAssets(mapped);
   }
 
   public static async createBrandKit(organizationId: string, brandKit: BrandKit): Promise<BrandKit> {
@@ -95,7 +113,7 @@ export class BrandKitService {
       throw new ServiceError('write_failed', 'Unable to create the organization brand kit.', error);
     }
     const saved = mapRowToBrandKit(data as BrandKitRow);
-    return saved;
+    return hydrateBrandKitAssets(saved);
   }
 
   public static async updateBrandKit(organizationId: string, brandKit: BrandKit): Promise<BrandKit> {
@@ -117,7 +135,7 @@ export class BrandKitService {
       throw new ServiceError(error ? 'write_failed' : 'not_found', 'Unable to update the organization brand kit.', error);
     }
     const saved = mapRowToBrandKit(data as BrandKitRow);
-    return saved;
+    return hydrateBrandKitAssets(saved);
   }
 
   /** Explicit operation selection avoids inferring create/update from IDs. */

@@ -69,6 +69,7 @@ export interface CampaignSourceData {
 
 export interface CampaignImage {
   id: string;
+  assetId?: string;
   url: string;
   name: string;
   source: 'upload' | 'ai_generated' | 'sample';
@@ -84,6 +85,7 @@ export interface CampaignImage {
   provenance?: 'generated' | 'uploaded' | 'fixture' | 'fallback' | 'failed';
   storageBucket?: string;
   storagePath?: string;
+  mimeType?: string;
 }
 
 import { GenerationMetadata } from './providers';

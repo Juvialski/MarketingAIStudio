@@ -4,6 +4,7 @@ import { ServiceError } from './serviceError';
 export type StorageBucket = 'property-media' | 'brand-assets' | 'campaign-assets' | 'campaign-exports';
 
 export interface StorageAsset {
+  assetId?: string;
   bucket: StorageBucket;
   /** Canonical tenant-scoped object path; the first segment is organizationId. */
   path: string;
@@ -11,6 +12,7 @@ export interface StorageAsset {
   url: string;
   /** Backwards-compatible alias for existing intake code. */
   publicUrl: string;
+  mimeType?: string;
 }
 
 const segment = (value: string, label: string): string => {
@@ -95,12 +97,45 @@ export class StorageService {
     file: File
   ): Promise<StorageAsset> {
     const path = this.canonicalPropertyPath(organizationId, campaignId, file.name);
-    return this.upload('property-media', path, file, false);
+    const asset = await this.upload('property-media', path, file, false);
+
+    if (isSupabaseConfigured() && organizationId && campaignId && !campaignId.startsWith('demo-')) {
+      try {
+        const { data: assetRow } = await supabase
+          .from('campaign_assets')
+          .insert({
+            organization_id: organizationId,
+            campaign_id: campaignId,
+            asset_type: 'property_photo',
+            storage_bucket: 'property-media',
+            storage_path: path,
+            public_url: null,
+            mime_type: file.type || 'image/jpeg',
+            source: 'upload',
+            is_hero: false,
+            metadata: { original_name: file.name, size: file.size, provenance: 'uploaded' },
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (assetRow?.id) {
+          asset.assetId = assetRow.id;
+        }
+      } catch (err) {
+        // If campaign record not yet committed, asset remains securely stored in Storage
+        console.warn('Could not register campaign_assets row yet', err);
+      }
+    }
+
+    asset.mimeType = file.type || 'image/jpeg';
+    return asset;
   }
 
   public static async uploadBrandLogo(organizationId: string, file: File): Promise<StorageAsset> {
     const path = this.canonicalBrandLogoPath(organizationId, file.name);
-    return this.upload('brand-assets', path, file, true);
+    const asset = await this.upload('brand-assets', path, file, true);
+    asset.mimeType = file.type || 'image/png';
+    return asset;
   }
 
   public static async uploadDesignExport(
@@ -111,6 +146,29 @@ export class StorageService {
   ): Promise<StorageAsset> {
     const path = this.canonicalExportPath(organizationId, campaignId, filename);
     return this.upload('campaign-exports', path, blob, true);
+  }
+
+  public static async deleteCampaignAsset(
+    organizationId: string,
+    campaignId: string,
+    storagePath: string,
+    bucket: StorageBucket = 'property-media'
+  ): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+
+    try {
+      // 1. Delete from campaign_assets table if present
+      await supabase
+        .from('campaign_assets')
+        .delete()
+        .eq('organization_id', organizationId)
+        .eq('storage_path', storagePath);
+
+      // 2. Remove object from Supabase Storage
+      await supabase.storage.from(bucket).remove([storagePath]);
+    } catch (err) {
+      console.warn('Asset deletion cleanup notice', err);
+    }
   }
 }
 

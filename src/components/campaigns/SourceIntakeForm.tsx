@@ -108,7 +108,8 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
         );
 
         const newImg: CampaignImage = {
-          id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          id: asset.assetId || `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          assetId: asset.assetId,
           url: asset.url,
           name: file.name,
           source: 'upload',
@@ -119,6 +120,7 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
           isConceptual: false,
           storageBucket: asset.bucket,
           storagePath: asset.path,
+          mimeType: asset.mimeType,
         };
 
         setUploadedImages((prev) => [...prev, newImg]);
@@ -155,6 +157,15 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
   };
 
   const removeImage = (id: string) => {
+    const target = uploadedImages.find((img) => img.id === id);
+    if (target?.storagePath && organizationId && campaignId) {
+      void StorageService.deleteCampaignAsset(
+        organizationId,
+        campaignId,
+        target.storagePath,
+        (target.storageBucket as any) || 'property-media'
+      );
+    }
     setUploadedImages((prev) => prev.filter((img) => img.id !== id));
   };
 

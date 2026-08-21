@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrandKit, ColorPalette, TypographyFamily } from '../../types/brandKit';
 import { createNeutralBrandKit } from '../../services/storage/brandKitStore';
+import { StorageService } from '../../services/supabase/storageService';
 import { BrandColorField } from './BrandColorField';
 import { 
   Palette, 
@@ -11,11 +12,15 @@ import {
   RotateCcw, 
   Eye, 
   Plus, 
-  Trash2 
+  Trash2,
+  Upload,
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 
 interface BrandKitManagerProps {
   brandKit: BrandKit;
+  organizationId?: string;
   runtimeMode?: 'demo' | 'live';
   onSaveBrandKit: (brandKit: BrandKit) => void;
 }
@@ -35,12 +40,17 @@ const BRAND_COLOR_TOKENS: Array<{
 
 export const BrandKitManager: React.FC<BrandKitManagerProps> = ({
   brandKit,
+  organizationId = 'demo-org',
   runtimeMode = 'live',
   onSaveBrandKit,
 }) => {
   const [formData, setFormData] = useState<BrandKit>(brandKit);
   const [newForbiddenWord, setNewForbiddenWord] = useState('');
   const [savedAlert, setSavedAlert] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingDarkLogo, setUploadingDarkLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoDarkInputRef = useRef<HTMLInputElement>(null);
 
   // Synchronize form data when brandKit prop updates across runtimes or on reset
   useEffect(() => {
@@ -49,6 +59,58 @@ export const BrandKitManager: React.FC<BrandKitManagerProps> = ({
 
   const handleUpdate = (updates: Partial<BrandKit>) => {
     setFormData((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isDark = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (isDark) {
+      setUploadingDarkLogo(true);
+    } else {
+      setUploadingLogo(true);
+    }
+
+    try {
+      const asset = await StorageService.uploadBrandLogo(organizationId, file);
+      if (isDark) {
+        handleUpdate({
+          logoDarkUrl: asset.url,
+          logoDarkStorageBucket: asset.bucket,
+          logoDarkStoragePath: asset.path,
+        });
+      } else {
+        handleUpdate({
+          logoUrl: asset.url,
+          logoStorageBucket: asset.bucket,
+          logoStoragePath: asset.path,
+        });
+      }
+    } catch (err) {
+      console.error('Logo upload failed', err);
+    } finally {
+      if (isDark) {
+        setUploadingDarkLogo(false);
+      } else {
+        setUploadingLogo(false);
+      }
+    }
+  };
+
+  const handleRemoveLogo = (isDark = false) => {
+    if (isDark) {
+      handleUpdate({
+        logoDarkUrl: '',
+        logoDarkStorageBucket: undefined,
+        logoDarkStoragePath: undefined,
+      });
+    } else {
+      handleUpdate({
+        logoUrl: '',
+        logoStorageBucket: undefined,
+        logoStoragePath: undefined,
+      });
+    }
   };
 
   const handleColorUpdate = (key: keyof ColorPalette, val: string) => {
@@ -201,6 +263,121 @@ export const BrandKitManager: React.FC<BrandKitManagerProps> = ({
                   onChange={(e) => handleUpdate({ email: e.target.value })}
                   className="w-full text-xs p-2 border border-slate-300 rounded-lg"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Brand Logos & Visual Marks */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-subtle space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-slate-600" />
+                Brand Logos & Visual Marks
+              </h3>
+              <span className="text-[11px] text-slate-400 font-mono">Private Storage Identity</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Primary Logo */}
+              <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">Primary Logo (Light Surfaces)</label>
+                  {formData.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLogo(false)}
+                      className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="h-24 bg-white border border-dashed border-slate-300 rounded-lg flex items-center justify-center overflow-hidden p-2">
+                  {formData.logoUrl ? (
+                    <img
+                      src={formData.logoUrl}
+                      alt="Primary Brand Logo"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-mono">No primary logo uploaded</span>
+                  )}
+                </div>
+
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => void handleLogoUpload(e, false)}
+                />
+
+                <button
+                  type="button"
+                  disabled={uploadingLogo}
+                  onClick={() => logoInputRef.current?.click()}
+                  className="w-full py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  {uploadingLogo ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-slate-600" />
+                  )}
+                  <span>{uploadingLogo ? 'Uploading to Storage...' : 'Upload Primary Logo'}</span>
+                </button>
+              </div>
+
+              {/* Dark Mode Logo */}
+              <div className="p-4 border border-slate-200 rounded-xl bg-slate-900 text-white space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-200">Dark Logo (Dark Surfaces)</label>
+                  {formData.logoDarkUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLogo(true)}
+                      className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="h-24 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center overflow-hidden p-2">
+                  {formData.logoDarkUrl ? (
+                    <img
+                      src={formData.logoDarkUrl}
+                      alt="Dark Mode Brand Logo"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[11px] text-slate-500 font-mono">No dark logo uploaded</span>
+                  )}
+                </div>
+
+                <input
+                  ref={logoDarkInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => void handleLogoUpload(e, true)}
+                />
+
+                <button
+                  type="button"
+                  disabled={uploadingDarkLogo}
+                  onClick={() => logoDarkInputRef.current?.click()}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  {uploadingDarkLogo ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                  <span>{uploadingDarkLogo ? 'Uploading to Storage...' : 'Upload Dark Logo'}</span>
+                </button>
               </div>
             </div>
           </div>

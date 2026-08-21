@@ -28,6 +28,10 @@ export interface BrandKit {
   tagline?: string;
   logoUrl?: string;
   logoDarkUrl?: string;
+  logoStorageBucket?: string;
+  logoStoragePath?: string;
+  logoDarkStorageBucket?: string;
+  logoDarkStoragePath?: string;
   website: string;
   phone: string;
   email: string;

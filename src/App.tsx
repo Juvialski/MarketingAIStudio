@@ -541,6 +541,7 @@ export function App() {
       {activeView === 'brand' && (
         <BrandKitManager
           brandKit={brandKit}
+          organizationId={organization?.id}
           runtimeMode={runtimeMode}
           onSaveBrandKit={(kit) => void handleSaveBrandKit(kit)}
         />

@@ -252,6 +252,7 @@ export interface IAIProvider {
 export interface GeneratedImageResult {
   url: string;
   id: string;
+  assetId?: string;
   altText: string;
   isAiIllustrative: boolean;
   provider: string;

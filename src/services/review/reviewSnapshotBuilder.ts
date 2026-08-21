@@ -13,6 +13,7 @@ import {
   SanitizedGraphicVariant, 
   SanitizedCopyChannel 
 } from '../../types/review';
+import { parseSupabaseStorageUrl } from '../supabase/assetResolver';
 
 export interface SnapshotBuildOptions {
   includedFormats?: OutputAspectRatio[];
@@ -200,12 +201,49 @@ export function buildReviewSnapshot(
   // 3. Presentation Deck (DO NOT auto-generate unreviewed presentations during publish!)
   const presentation = options.includePresentation !== false ? campaign.presentation : undefined;
 
+  // Extract canonical asset references
+  const parsedHero = parseSupabaseStorageUrl(heroImage.url);
+  const heroBucket = heroImage.storageBucket || parsedHero?.bucket;
+  const heroPath = heroImage.storagePath || parsedHero?.path;
+  const heroImageRef =
+    heroBucket && heroPath
+      ? {
+          assetId: heroImage.assetId,
+          storageBucket: heroBucket,
+          storagePath: heroPath,
+          mimeType: heroImage.mimeType,
+        }
+      : undefined;
+
+  const parsedLogo = parseSupabaseStorageUrl(brandKit.logoUrl);
+  const logoBucket = brandKit.logoStorageBucket || parsedLogo?.bucket;
+  const logoPath = brandKit.logoStoragePath || parsedLogo?.path;
+  const logoRef =
+    logoBucket && logoPath
+      ? {
+          storageBucket: logoBucket,
+          storagePath: logoPath,
+        }
+      : undefined;
+
+  const parsedDarkLogo = parseSupabaseStorageUrl(brandKit.logoDarkUrl);
+  const darkLogoBucket = brandKit.logoDarkStorageBucket || parsedDarkLogo?.bucket;
+  const darkLogoPath = brandKit.logoDarkStoragePath || parsedDarkLogo?.path;
+  const logoDarkRef =
+    darkLogoBucket && darkLogoPath
+      ? {
+          storageBucket: darkLogoBucket,
+          storagePath: darkLogoPath,
+        }
+      : undefined;
+
   // 4. Assemble Sanitized Snapshot (Free of internal DB IDs / AI metadata / debug data)
   const snapshot: ReviewSnapshot = {
     campaignTitle: campaign.sourceData.title || campaign.name,
     campaignType: campaign.sourceData.campaignType,
     targetMarket: campaign.sourceData.targetMarket,
     heroImageUrl: heroImage.url,
+    heroImageRef,
     property: campaign.sourceData.property
       ? {
           address: campaign.sourceData.property.address,
@@ -238,6 +276,8 @@ export function buildReviewSnapshot(
       tagline: brandKit.tagline,
       logoUrl: brandKit.logoUrl,
       logoDarkUrl: brandKit.logoDarkUrl,
+      logoRef,
+      logoDarkRef,
       website: brandKit.website,
       phone: brandKit.phone,
       email: brandKit.email,
