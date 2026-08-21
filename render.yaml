@@ -2,7 +2,7 @@ services:
   - type: web
     name: zaw-marketing-studio
     env: static
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite

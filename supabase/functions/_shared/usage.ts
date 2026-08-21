@@ -12,7 +12,7 @@ export async function claimGeneration(
   args: {
     organizationId: string;
     userId: string;
-    campaignId: string;
+    campaignId?: string | null;
     operationType: string;
     provider: string;
     model: string;
@@ -24,7 +24,7 @@ export async function claimGeneration(
   const { data, error } = await admin.rpc('claim_ai_generation', {
     p_organization_id: args.organizationId,
     p_user_id: args.userId,
-    p_campaign_id: args.campaignId,
+    p_campaign_id: args.campaignId ?? null,
     p_operation_type: args.operationType,
     p_provider: args.provider,
     p_model: args.model,

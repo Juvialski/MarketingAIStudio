@@ -210,6 +210,48 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
     }
   };
 
+  const handleFallbackToFixture = async () => {
+    setErrorMsg(null);
+    setIsGenerating(true);
+    setProgressMsg('Loading curated fixture visual...');
+    try {
+      const adapter = ImageProviderRouter.getAdapterForConfig(config, { runtimeMode: 'demo' });
+      const brief: ImageCreativeBrief = {
+        purpose,
+        subject: customSubject.trim() || `${propertyTitle} in ${targetMarket} (${propertyType.replace('_', ' ')})`,
+        style,
+        aspectRatio,
+        qualityTier: 'free_dev',
+        isConceptual: true,
+        generationMode: 'fixture',
+      };
+      const result = await adapter.generateFromBrief(brief);
+
+      const newCampaignImg: CampaignImage = {
+        id: result.id || `fixture-img-${Date.now()}`,
+        url: result.url,
+        name: `Curated Demo Visual: ${purpose.toUpperCase()}`,
+        source: 'sample',
+        aspectRatio: aspectRatio === '16:9' ? 1.77 : aspectRatio === '4:5' ? 0.8 : aspectRatio === '9:16' ? 0.56 : 1.0,
+        isHero: purpose === 'hero',
+        isAiIllustrative: true,
+        isConceptual: true,
+        estimatedCostUsd: 0,
+        provider: 'demo_fixture',
+        provenance: 'fixture',
+      };
+
+      onImageGenerated(newCampaignImg);
+      onClose();
+    } catch (fallbackErr: any) {
+      console.error('Fallback fixture failed', fallbackErr);
+      setErrorMsg(fallbackErr.message || 'Could not load fixture image.');
+    } finally {
+      setIsGenerating(false);
+      setProgressMsg('');
+    }
+  };
+
   const toggleReference = (url: string) => {
     setSelectedReferenceUrls((prev) =>
       prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
@@ -541,9 +583,29 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
           )}
 
           {errorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-xl text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span>{errorMsg}</span>
+            <div className="bg-red-50 border border-red-200 text-red-900 p-4 rounded-xl text-xs space-y-2.5">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                <div className="flex-1 space-y-1">
+                  <div className="font-semibold text-red-900">Image Generation Backend Notice</div>
+                  <p className="text-red-800 leading-relaxed">{errorMsg}</p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-red-200/60 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-red-700">
+                  You can immediately insert a bundled high-resolution visual fixture instead:
+                </span>
+                <button
+                  type="button"
+                  onClick={handleFallbackToFixture}
+                  disabled={isGenerating}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition-colors"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Use Curated Fixture Asset Instead</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

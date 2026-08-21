@@ -3,7 +3,7 @@ name: Production verification
 on:
   pull_request:
   push:
-    branches: [main, codex/hardening-production-readiness]
+    branches: [main]
 
 permissions:
   contents: read
@@ -11,27 +11,47 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       CI: true
       VITE_SUPABASE_URL: https://csolgywkgummefnwouny.supabase.co
       VITE_SUPABASE_ANON_KEY: ""
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - run: npm ci
       - run: npm run typecheck
+
+      - name: Typecheck Supabase Edge Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in supabase/functions/*/index.ts; do
+            echo "deno check $file"
+            deno check "$file"
+          done
+
       - run: npm test
       - run: npm run test:security
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: playwright-failure-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
           retention-days: 7

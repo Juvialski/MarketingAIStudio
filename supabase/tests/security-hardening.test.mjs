@@ -31,7 +31,7 @@ test('forward migration binds tenant children and owner role changes', async () 
 });
 
 test('Edge Functions share auth, schema validation and sanitized errors', async () => {
-  for (const name of ['critique-copy', 'generate-campaign-strategy', 'generate-copy', 'generate-image', 'generate-presentation', 'health']) {
+  for (const name of ['critique-copy', 'extract-property-data', 'generate-campaign-strategy', 'generate-copy', 'generate-image', 'generate-presentation', 'health']) {
     const source = await read(`functions/${name}/index.ts`);
     assert.match(source, /authenticate/);
     assert.match(source, /assertOrganizationAccess/);

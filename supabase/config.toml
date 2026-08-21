@@ -1,4 +1,4 @@
-# Supabase configuration for ZawMarketing
+# Supabase configuration for DeedForge
 project_id = "csolgywkgummefnwouny"
 
 [api]
@@ -40,6 +40,9 @@ enable_confirmations = false
 [functions.critique-copy]
 verify_jwt = true
 
+[functions.extract-property-data]
+verify_jwt = true
+
 [functions.generate-campaign-strategy]
 verify_jwt = true
 
@@ -54,4 +57,3 @@ verify_jwt = true
 
 [functions.health]
 verify_jwt = true
-

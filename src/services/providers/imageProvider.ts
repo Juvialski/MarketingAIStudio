@@ -90,7 +90,19 @@ export async function extractEdgeErrorMessage(error: any): Promise<{ code: strin
       }
     }
     if (error.message) {
-      return { code: 'provider_error', message: error.message };
+      const msg = String(error.message);
+      if (
+        msg.includes('Failed to send a request to the Edge Function') ||
+        msg.includes('FunctionsFetchError') ||
+        msg.includes('FunctionsRelayError') ||
+        msg.includes('Failed to fetch')
+      ) {
+        return {
+          code: 'edge_function_unreachable',
+          message: 'The Supabase Edge Function "generate-image" is not deployed yet or is unreachable. Deploy it with `supabase functions deploy generate-image`, or use the offline-safe demo fixtures.',
+        };
+      }
+      return { code: 'provider_error', message: msg };
     }
   }
   return { code: 'provider_unavailable', message: 'Image generation backend is temporarily unavailable.' };
@@ -98,6 +110,7 @@ export async function extractEdgeErrorMessage(error: any): Promise<{ code: strin
 
 function getHumanMessageForCode(code: string): string {
   const messages: Record<string, string> = {
+    edge_function_unreachable: 'The Supabase Edge Function "generate-image" is not deployed yet or is unreachable. Deploy it with `supabase functions deploy generate-image`, or use the offline-safe demo fixtures.',
     unauthorized: 'Authentication is required. Please sign in.',
     organization_access_denied: 'You do not have access to this organization workspace.',
     campaign_access_denied: 'You do not have access to this campaign or it has not been saved.',

@@ -1,6 +1,7 @@
 // Authenticated, server-owned property data extraction from unformatted text.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { z } from 'https://esm.sh/zod@3.25.76';
 import { AppError, ProviderError, providerAppError } from '../_shared/errors.ts';
 import { assertOrganizationAccess, authenticate } from '../_shared/auth.ts';
 import { claimGeneration, finishGeneration } from '../_shared/usage.ts';
@@ -8,14 +9,17 @@ import { generateGeminiJson } from '../_shared/gemini.ts';
 import { assertGeminiTextModel, geminiTextIsPaid, GEMINI_TEXT_MODELS } from '../_shared/providers.ts';
 import { handleOptions, ensurePost, errorResponse, idempotencyKey, jsonResponse } from '../_shared/http.ts';
 import { parseBody } from '../_shared/validation.ts';
-import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const extractionRequestSchema = z.object({
-  organizationId: z.string().min(1),
-  campaignId: z.string().optional(),
-  rawText: z.string().min(1).max(50000),
-  modelId: z.string().optional(),
-});
+  organizationId: z.string().uuid(),
+  // New-campaign intake currently sends a draft placeholder. We intentionally
+  // accept a bounded string here and normalize non-UUID values to null before
+  // authorization/usage accounting. Existing campaigns still use their UUID.
+  campaignId: z.string().trim().min(1).max(160).optional(),
+  rawText: z.string().trim().min(1).max(50_000),
+  modelId: z.string().trim().min(1).max(160).optional(),
+  idempotencyKey: z.string().trim().min(8).max(128).optional(),
+}).strict();
 
 const extractedFieldStringSchema = {
   type: 'object',
@@ -104,85 +108,91 @@ const responseJsonSchema = {
 };
 
 const fallbackModel = GEMINI_TEXT_MODELS[0];
+const uuidSchema = z.string().uuid();
 
 serve(async (req) => {
   const options = handleOptions(req);
   if (options) return options;
+
   let usageId: string | undefined;
+  let estimatedCost = 0;
+
   try {
     ensurePost(req);
     const ctx = await authenticate(req);
     const body = await parseBody(req, extractionRequestSchema);
     const requestKey = idempotencyKey(req, body);
-    await assertOrganizationAccess(ctx, body.organizationId, body.campaignId);
+
+    // A draft placeholder is not a persisted campaign and must not be checked
+    // as one. Organization membership remains mandatory in every live request.
+    const parsedCampaignId = body.campaignId ? uuidSchema.safeParse(body.campaignId) : null;
+    const campaignId = parsedCampaignId?.success ? parsedCampaignId.data : null;
+    await assertOrganizationAccess(ctx, body.organizationId, campaignId ?? undefined);
 
     const model = body.modelId ?? fallbackModel;
     assertGeminiTextModel(model);
     const isPaid = geminiTextIsPaid();
-    const estimatedCost = isPaid ? Number(Deno.env.get('GEMINI_TEXT_ESTIMATED_COST_USD') ?? NaN) : 0;
+    estimatedCost = isPaid ? Number(Deno.env.get('GEMINI_TEXT_ESTIMATED_COST_USD') ?? NaN) : 0;
     if (isPaid && (!Number.isFinite(estimatedCost) || estimatedCost < 0)) {
       throw new AppError('provider_pricing_unconfigured', 503, 'The server is not configured for this provider.');
     }
+
     const claim = await claimGeneration(ctx.admin, {
       organizationId: body.organizationId,
       userId: ctx.user.id,
-      campaignId: body.campaignId,
-      idempotencyKey: requestKey,
-      modelId: model,
+      campaignId,
+      operationType: 'extract-property-data',
       provider: 'gemini',
+      model,
+      idempotencyKey: requestKey,
       isPaid,
       estimatedCostUsd: estimatedCost,
     });
-    if (claim.cachedResponse) {
-      return jsonResponse(claim.cachedResponse);
-    }
     usageId = claim.usageId;
 
     const prompt = `You are a real estate investment property underwriting and data extraction specialist.
 Extract factual property attributes, underwriting numbers, location specifics, and investment highlights from the unformatted text provided below.
 
 CRITICAL FACTUAL DIRECTIVES:
-1. Extract ONLY facts that are explicitly stated or direct mathematical derivations stated in the text.
-2. NEVER hallucinate, guess, or invent numbers (e.g. if ARV or rehab is not stated in the text, DO NOT include that field).
+1. Extract ONLY facts explicitly stated in the source text. You may normalize formatting, but do not infer missing facts.
+2. NEVER hallucinate, guess, or invent numbers. If ARV, rehab, rent, NOI, cap rate, or another value is absent, omit that field.
 3. If an attribute is absent from the text, omit it entirely from the output object.
-4. For monetary numbers (purchasePrice, renovationEstimate, arv, projectedRentMonthly, currentRentMonthly, NOI), extract purely numeric dollar values (e.g., "$350k" -> 350000, "$1.2M" -> 1200000).
-5. For percentages (capRatePercent, cashOnCashPercent), extract the numerical percentage (e.g., "7.5%" -> 7.5).
-6. Provide an exact 'evidenceSnippet' showing the verbatim segment of the text from which each field was extracted.
+4. For monetary numbers, return numeric dollar values (for example "$350k" -> 350000 and "$1.2M" -> 1200000).
+5. For percentages, return the numeric percentage (for example "7.5%" -> 7.5).
+6. For every extracted field, include an evidenceSnippet copied from the supplied source text.
 
 UNFORMATTED SOURCE TEXT:
 """
 ${body.rawText}
 """`;
 
-    const rawData = await generateGeminiJson(model, prompt, responseJsonSchema, 'high');
-    const fieldsExtractedCount = Object.keys(rawData as object || {}).length;
+    try {
+      const rawData = await generateGeminiJson(model, prompt, responseJsonSchema, 'high');
+      const fieldsExtractedCount = Object.keys((rawData as object) || {}).length;
+      const result = {
+        data: rawData,
+        fieldsExtractedCount,
+        rawInput: body.rawText,
+        timestamp: new Date().toISOString(),
+        source: 'ai_llm',
+        modelUsed: model,
+      };
 
-    const result = {
-      data: rawData,
-      fieldsExtractedCount,
-      rawInput: body.rawText,
-      timestamp: new Date().toISOString(),
-      source: 'ai_llm',
-      modelUsed: model,
-    };
-
-    if (usageId) {
-      await finishGeneration(ctx.admin, {
+      await finishGeneration(ctx.admin, usageId, 'success', undefined, estimatedCost);
+      return jsonResponse(req, result);
+    } catch (error) {
+      await finishGeneration(
+        ctx.admin,
         usageId,
-        idempotencyKey: requestKey,
-        responsePayload: result,
-      });
+        'failed',
+        error instanceof ProviderError ? error.code : 'provider_error',
+      );
+      if (error instanceof ProviderError) throw providerAppError(error);
+      throw error;
     }
-    return jsonResponse(result);
   } catch (error) {
-    if (error instanceof ProviderError) {
-      const mapped = providerAppError(error);
-      return errorResponse(mapped.code, mapped.status, mapped.message);
-    }
-    if (error instanceof AppError) {
-      return errorResponse(error.code, error.status, error.message);
-    }
-    console.error('Unhandled error in extract-property-data', error);
-    return errorResponse('internal_error', 500, 'Property data extraction failed.');
+    if (error instanceof AppError) return errorResponse(req, error);
+    if (error instanceof ProviderError) return errorResponse(req, providerAppError(error));
+    return errorResponse(req, providerAppError(error));
   }
 });

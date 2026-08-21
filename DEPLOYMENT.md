@@ -85,6 +85,7 @@ supabase functions deploy generate-campaign-strategy --project-ref <your-project
 supabase functions deploy generate-copy --project-ref <your-project-ref>
 supabase functions deploy generate-presentation --project-ref <your-project-ref>
 supabase functions deploy critique-copy --project-ref <your-project-ref>
+supabase functions deploy extract-property-data --project-ref <your-project-ref>
 supabase functions deploy generate-image --project-ref <your-project-ref>
 supabase functions deploy health --project-ref <your-project-ref>
 ```
