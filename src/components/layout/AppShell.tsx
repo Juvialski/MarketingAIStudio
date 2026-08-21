@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
 import { BrandKit } from '../../types/brandKit';
 import { AppProfile } from '../../services/supabase/authService';
 import { AppOrganization } from '../../services/supabase/organizationService';
 import { LogIn, LogOut } from 'lucide-react';
+import {
+  clearWorkspaceNavigation,
+  readWorkspaceNavigation,
+  rememberAppView,
+} from '../../services/storage/workspaceNavigation';
 
 interface AppShellProps {
   activeView: string;
@@ -31,11 +36,47 @@ export const AppShell: React.FC<AppShellProps> = ({
   children,
 }) => {
   const isDemo = runtimeMode === 'demo';
+  const restoreAttempted = useRef(false);
+
+  useEffect(() => {
+    if (restoreAttempted.current) return;
+    restoreAttempted.current = true;
+
+    const saved = readWorkspaceNavigation();
+    if (!saved) return;
+
+    // CampaignLibrary performs the second half of workspace restoration once
+    // campaigns are available. Going through the library avoids racing async
+    // Supabase/demo campaign loading in App.tsx.
+    if (saved.view === 'workspace' && saved.campaignId) {
+      onNavigate('campaigns');
+      return;
+    }
+
+    if (saved.view && saved.view !== 'workspace' && saved.view !== activeView) {
+      onNavigate(saved.view);
+    }
+  }, [activeView, onNavigate]);
+
+  const handleNavigate = (view: string) => {
+    rememberAppView(view);
+    onNavigate(view);
+  };
+
+  const handleExitDemo = () => {
+    clearWorkspaceNavigation();
+    onExitDemo?.();
+  };
+
+  const handleSignOut = () => {
+    clearWorkspaceNavigation();
+    onSignOut();
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Left Sidebar */}
-      <Sidebar activeView={activeView} onNavigate={onNavigate} brandKit={brandKit} />
+      <Sidebar activeView={activeView} onNavigate={handleNavigate} brandKit={brandKit} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -56,7 +97,7 @@ export const AppShell: React.FC<AppShellProps> = ({
             {isDemo && onExitDemo && (
               <button
                 type="button"
-                onClick={onExitDemo}
+                onClick={handleExitDemo}
                 className="px-2.5 py-1 text-[11px] font-mono font-bold uppercase tracking-wider text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
                 title="Exit demo mode and return to live workspace"
               >
@@ -81,7 +122,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                     </div>
                   </div>
                   <button
-                    onClick={onSignOut}
+                    onClick={handleSignOut}
                     className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-colors"
                     title="Sign Out"
                   >

@@ -9,6 +9,9 @@ services:
         source: /*
         destination: /index.html
     headers:
+      - path: /demo/*
+        name: Cache-Control
+        value: no-store, max-age=0, must-revalidate
       - path: /*
         name: X-Frame-Options
         value: SAMEORIGIN

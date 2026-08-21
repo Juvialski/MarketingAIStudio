@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Campaign } from '../../types/campaign';
 import { BrandKit } from '../../types/brandKit';
-import { 
-  Plus, 
-  Search, 
-  Building, 
-  Copy, 
-  Trash2, 
-  ArrowRight, 
-  RotateCcw, 
-  Download 
+import {
+  Plus,
+  Search,
+  Building,
+  Copy,
+  Trash2,
+  ArrowRight,
+  RotateCcw,
+  Download
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { MarketingKitZipExporter } from '../../services/export/marketingKitZip';
+import {
+  readWorkspaceNavigation,
+  rememberWorkspace,
+} from '../../services/storage/workspaceNavigation';
+import { resolveDemoAssetUrl } from '../../utils/demoAssets';
 
 interface CampaignLibraryProps {
   campaigns: Campaign[];
@@ -36,6 +41,17 @@ export const CampaignLibrary: React.FC<CampaignLibraryProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [zippingId, setZippingId] = useState<string | null>(null);
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const saved = readWorkspaceNavigation();
+    if (saved?.view !== 'workspace' || !saved.campaignId) return;
+
+    const campaign = campaigns.find((item) => item.id === saved.campaignId);
+    if (campaign) {
+      onSelectCampaign(campaign);
+    }
+  }, [campaigns, onSelectCampaign]);
 
   const filtered = campaigns.filter((c) => {
     const matchesSearch =
@@ -57,6 +73,11 @@ export const CampaignLibrary: React.FC<CampaignLibraryProps> = ({
     } finally {
       setZippingId(null);
     }
+  };
+
+  const handleOpenCampaign = (campaign: Campaign) => {
+    rememberWorkspace(campaign.id);
+    onSelectCampaign(campaign);
   };
 
   return (
@@ -134,32 +155,38 @@ export const CampaignLibrary: React.FC<CampaignLibraryProps> = ({
             campaign.sourceData.uploadedImages[0];
           const prop = campaign.sourceData.property;
           const fin = prop?.financials;
+          const imageFailed = failedImageIds.has(campaign.id);
 
           return (
             <div
               key={campaign.id}
-              onClick={() => onSelectCampaign(campaign)}
+              onClick={() => handleOpenCampaign(campaign)}
               className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-400 overflow-hidden shadow-subtle hover:shadow-elevated transition-all cursor-pointer flex flex-col justify-between"
             >
               {/* Photo & Badge */}
               <div className="relative h-44 bg-slate-950 overflow-hidden">
-                {heroImg ? (
+                {heroImg && !imageFailed ? (
                   <img
-                    src={heroImg.url}
+                    src={resolveDemoAssetUrl(heroImg.url) || heroImg.url}
                     alt={campaign.name}
                     referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      // Fallback to demo multifamily exterior if specified image fails
-                      const target = e.currentTarget;
-                      if (!target.src.includes('multifamily-exterior.png')) {
-                        target.src = '/demo/multifamily-exterior.png';
-                      }
+                    onError={() => {
+                      setFailedImageIds((previous) => {
+                        const next = new Set(previous);
+                        next.add(campaign.id);
+                        return next;
+                      });
                     }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-600">
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-2">
                     <Building className="w-10 h-10" />
+                    {imageFailed && (
+                      <span className="text-[10px] font-mono uppercase tracking-wider">
+                        Image unavailable
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />

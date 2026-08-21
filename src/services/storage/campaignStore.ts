@@ -1,5 +1,6 @@
 import { Campaign, GraphicDesignConfig, OutputAspectRatio } from '../../types/campaign';
 import { SAMPLE_CAMPAIGNS } from '../../data/sampleCampaigns';
+import { normalizeDemoAssetReferences } from '../../utils/demoAssets';
 
 const STORAGE_KEY = 'zaw_marketing_campaigns_v1';
 
@@ -19,6 +20,9 @@ const getLocalStorage = (): Storage | null => {
 };
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const normalizeCampaigns = (campaigns: Campaign[]): Campaign[] =>
+  normalizeDemoAssetReferences(clone(campaigns));
 
 const localId = (): string => {
   const cryptoObject = typeof globalThis.crypto !== 'undefined' ? globalThis.crypto : undefined;
@@ -53,8 +57,8 @@ export class CampaignStore {
 
   public static getAll(options: LocalStoreOptions = {}): Campaign[] {
     const campaigns = this.read();
-    if (campaigns) return clone(campaigns);
-    return options.allowDemoFixtures ? clone(SAMPLE_CAMPAIGNS) : [];
+    if (campaigns) return normalizeCampaigns(campaigns);
+    return options.allowDemoFixtures ? normalizeCampaigns(SAMPLE_CAMPAIGNS) : [];
   }
 
   public static getById(id: string, options: LocalStoreOptions = {}): Campaign | undefined {
@@ -64,10 +68,10 @@ export class CampaignStore {
   public static save(campaign: Campaign, options: LocalStoreOptions = {}): Campaign {
     const campaigns = this.getAll(options);
     const index = campaigns.findIndex((item) => item.id === campaign.id);
-    const updated: Campaign = {
+    const updated: Campaign = normalizeDemoAssetReferences({
       ...clone(campaign),
       updatedAt: new Date().toISOString(),
-    };
+    });
 
     if (index >= 0) campaigns[index] = updated;
     else campaigns.unshift(updated);
@@ -101,9 +105,9 @@ export class CampaignStore {
 
   /** Explicit user action to restore the clearly fictional demo workspace. */
   public static resetToSamples(): Campaign[] {
-    const samples = clone(SAMPLE_CAMPAIGNS);
+    const samples = normalizeCampaigns(SAMPLE_CAMPAIGNS);
     this.saveToStorage(samples);
-    return samples;
+    return clone(samples);
   }
 
   public static createDefaultDesignConfigs(): Record<OutputAspectRatio, GraphicDesignConfig> {

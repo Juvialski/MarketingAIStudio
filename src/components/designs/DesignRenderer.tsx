@@ -8,6 +8,7 @@ import { ModernBrokerageTemplate } from './templates/ModernBrokerageTemplate';
 import { DirectResponseTemplate } from './templates/DirectResponseTemplate';
 import { MarketIntelligenceTemplate } from './templates/MarketIntelligenceTemplate';
 import { FlyerTemplate } from './templates/FlyerTemplate';
+import { resolveDemoAssetUrl } from '../../utils/demoAssets';
 
 interface DesignRendererProps {
   campaign: Campaign;
@@ -61,6 +62,8 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
       url: '/demo/fictional-property-exterior.png',
     };
 
+  const heroImageUrl = resolveDemoAssetUrl(heroImage.url) || heroImage.url;
+
   const dimensions = FORMAT_DIMENSIONS[aspectRatio];
   const isA4 = aspectRatio === 'flyer_a4';
   const isLetter = aspectRatio === 'flyer_letter';
@@ -94,7 +97,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
           campaign={campaign}
           config={config}
           brandKit={brandKit}
-          heroImageUrl={heroImage.url}
+          heroImageUrl={heroImageUrl}
         />
       );
     }
@@ -106,7 +109,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
             campaign={campaign}
             config={config}
             brandKit={brandKit}
-            heroImageUrl={heroImage.url}
+            heroImageUrl={heroImageUrl}
           />
         );
       case 'modern_brokerage':
@@ -115,7 +118,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
             campaign={campaign}
             config={config}
             brandKit={brandKit}
-            heroImageUrl={heroImage.url}
+            heroImageUrl={heroImageUrl}
           />
         );
       case 'direct_response':
@@ -124,7 +127,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
             campaign={campaign}
             config={config}
             brandKit={brandKit}
-            heroImageUrl={heroImage.url}
+            heroImageUrl={heroImageUrl}
           />
         );
       case 'market_intelligence':
@@ -133,7 +136,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
             campaign={campaign}
             config={config}
             brandKit={brandKit}
-            heroImageUrl={heroImage.url}
+            heroImageUrl={heroImageUrl}
           />
         );
       case 'editorial':
@@ -143,7 +146,7 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
             campaign={campaign}
             config={config}
             brandKit={brandKit}
-            heroImageUrl={heroImage.url}
+            heroImageUrl={heroImageUrl}
           />
         );
     }

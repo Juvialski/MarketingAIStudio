@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Campaign, CampaignSourceData, CampaignStrategy, CampaignCopy, GraphicDesignConfig, OutputAspectRatio } from '../../types/campaign';
 import { BrandKit } from '../../types/brandKit';
 import { StrategyWorkspace } from './StrategyWorkspace';
@@ -8,17 +8,24 @@ import { FullMarketingKitView } from './FullMarketingKitView';
 import { SourceIntakeForm } from './SourceIntakeForm';
 import { PresentationWorkspace } from '../../features/presentations/components/PresentationWorkspace';
 import { ShareReviewWorkspace } from './ShareReviewWorkspace';
-import { 
-  Compass, 
-  FileText, 
-  Image as ImageIcon, 
-  Package, 
+import {
+  Compass,
+  FileText,
+  Image as ImageIcon,
+  Package,
   SlidersHorizontal,
   ArrowLeft,
   MapPin,
   Presentation,
   Share2
 } from 'lucide-react';
+import {
+  isWorkspaceTab,
+  readWorkspaceNavigation,
+  rememberAppView,
+  rememberWorkspace,
+  rememberWorkspaceTab,
+} from '../../services/storage/workspaceNavigation';
 
 interface CampaignWorkspaceProps {
   campaign: Campaign;
@@ -31,6 +38,18 @@ interface CampaignWorkspaceProps {
 
 type WorkspaceTab = 'kit' | 'strategy' | 'copy' | 'designs' | 'presentation' | 'review' | 'intake';
 
+const getInitialTab = (campaignId: string): WorkspaceTab => {
+  const saved = readWorkspaceNavigation();
+  if (
+    saved?.view === 'workspace' &&
+    saved.campaignId === campaignId &&
+    isWorkspaceTab(saved.workspaceTab)
+  ) {
+    return saved.workspaceTab;
+  }
+  return 'kit';
+};
+
 export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
   campaign,
   brandKit,
@@ -39,7 +58,23 @@ export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
   onUpdateCampaign,
   onBack,
 }) => {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('kit');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => getInitialTab(campaign.id));
+
+  useEffect(() => {
+    const nextTab = getInitialTab(campaign.id);
+    setActiveTab(nextTab);
+    rememberWorkspace(campaign.id, nextTab);
+  }, [campaign.id]);
+
+  const selectTab = (tab: WorkspaceTab) => {
+    setActiveTab(tab);
+    rememberWorkspaceTab(campaign.id, tab);
+  };
+
+  const handleBack = () => {
+    rememberAppView('campaigns');
+    onBack();
+  };
 
   const handleSaveSource = (sourceData: CampaignSourceData) => {
     const updated: Campaign = {
@@ -48,7 +83,7 @@ export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
       sourceData,
     };
     onUpdateCampaign(updated);
-    setActiveTab('strategy');
+    selectTab('strategy');
   };
 
   const handleSaveStrategy = (strategy: CampaignStrategy) => {
@@ -86,7 +121,7 @@ export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="flex items-center gap-3.5">
           <button
-            onClick={onBack}
+            onClick={handleBack}
             aria-label="Back to campaign library"
             className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 hover:text-slate-900 transition-colors shadow-subtle cursor-pointer"
           >
@@ -124,7 +159,7 @@ export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as WorkspaceTab)}
+                onClick={() => selectTab(tab.id as WorkspaceTab)}
                 className={`shrink-0 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-sm'
@@ -148,7 +183,7 @@ export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
             organizationId={organizationId}
             runtimeMode={runtimeMode}
             onUpdateCampaign={onUpdateCampaign}
-            onOpenReview={() => setActiveTab('review')}
+            onOpenReview={() => selectTab('review')}
           />
         )}
 
@@ -159,7 +194,7 @@ export const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
             organizationId={organizationId}
             runtimeMode={runtimeMode}
             onSaveStrategy={handleSaveStrategy}
-            onProceedToCopy={() => setActiveTab('copy')}
+            onProceedToCopy={() => selectTab('copy')}
           />
         )}
 
