@@ -44,6 +44,11 @@ export const presentationThemeSchema = z.object({
   colorScheme: z.enum(['dark', 'light']),
 });
 
+export const slideTextStyleSchema = z.object({
+  titleAlign: z.enum(['left', 'center', 'right']).optional(),
+  bodyAlign: z.enum(['left', 'center', 'right', 'justify']).optional(),
+});
+
 const baseSlideSchema = {
   id: safeString(1, 100),
   navLabel: optionalSafeString(100),
@@ -51,6 +56,7 @@ const baseSlideSchema = {
   title: safeString(1, 300),
   speakerNotes: optionalSafeString(3000),
   isHidden: z.boolean().optional(),
+  textStyle: slideTextStyleSchema.optional(),
 };
 
 export const coverSlideSchema = z.object({

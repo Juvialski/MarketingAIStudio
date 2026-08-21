@@ -77,10 +77,14 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
   const [isApprovingCampaign, setIsApprovingCampaign] = useState(false);
   const [campaignApprovalNotes, setCampaignApprovalNotes] = useState('');
   const [campaignApprovalSuccess, setCampaignApprovalSuccess] = useState(false);
+  const [heroImageError, setHeroImageError] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   // Load public snapshot
   const loadReviewPortal = async () => {
     setLoading(true);
+    setHeroImageError(false);
+    setLogoError(false);
     try {
       const res = await CampaignReviewService.getPublicSnapshot(token);
       if (res.status !== 'active' || !res.snapshot) {
@@ -374,10 +378,11 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
       <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
         {/* Brand & Property Title */}
         <div className="flex items-center gap-3.5">
-          {snapshot.brandKit.logoUrl ? (
+          {snapshot.brandKit.logoUrl && !logoError ? (
             <img 
               src={snapshot.brandKit.logoUrl} 
               alt={snapshot.brandKit.companyName} 
+              onError={() => setLogoError(true)}
               className="h-8 max-w-[120px] object-contain"
             />
           ) : (
@@ -441,11 +446,12 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
         <section className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Hero Image or Branded Placeholder */}
-            {snapshot.heroImageUrl && snapshot.heroImageUrl.trim() !== '' ? (
+            {snapshot.heroImageUrl && snapshot.heroImageUrl.trim() !== '' && !heroImageError ? (
               <div className="lg:col-span-5 aspect-[4/3] rounded-2xl overflow-hidden shadow-xl border border-slate-800 bg-slate-950 relative group">
                 <img
                   src={snapshot.heroImageUrl}
                   alt={snapshot.campaignTitle}
+                  onError={() => setHeroImageError(true)}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute bottom-3 left-3 bg-slate-950/80 backdrop-blur-sm border border-slate-800 px-3 py-1 rounded-lg text-[10px] font-mono text-slate-300">
@@ -457,8 +463,12 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                 <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
                   <MapPin className="w-6 h-6 text-slate-500" />
                 </div>
-                <div className="text-xs font-semibold text-slate-300">Property image not provided</div>
-                <div className="text-[10px] text-slate-500 mt-1 font-mono">Live campaign without primary photography</div>
+                <div className="text-xs font-semibold text-slate-300">
+                  {heroImageError ? 'Property image unavailable' : 'Property image not provided'}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1 font-mono">
+                  {heroImageError ? 'Failed to load primary photography' : 'Live campaign without primary photography'}
+                </div>
               </div>
             )}
 

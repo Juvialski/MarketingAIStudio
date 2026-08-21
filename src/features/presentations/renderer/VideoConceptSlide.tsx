@@ -2,24 +2,31 @@ import React from 'react';
 import Reveal from '../bolt/Reveal';
 import { VideoConceptSlide as VideoConceptSlideType } from '../../../types/presentation';
 import { Film, Volume2, Video } from 'lucide-react';
+import {
+  resolveTitleAlign,
+  getTitleAlignStyle,
+} from '../utils/resolveTextAlign';
 
 interface VideoConceptSlideProps {
   slide: VideoConceptSlideType;
 }
 
 export const VideoConceptSlide: React.FC<VideoConceptSlideProps> = ({ slide }) => {
+  const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+  const titleStyle = getTitleAlignStyle(titleAlign);
+
   return (
-    <div className="slide">
+    <div className={`slide ${titleAlign === 'center' ? 'center' : ''}`}>
       <div className="slide-container" style={{ maxWidth: 1100 }}>
         <Reveal>
           {slide.kicker && (
-            <div className="kicker" style={{ marginBottom: 8, textAlign: 'center' }}>
+            <div className="kicker" style={{ marginBottom: 8, textAlign: titleAlign }}>
               {slide.kicker}
             </div>
           )}
           <h2
             className="headline"
-            style={{ textAlign: 'center', marginInline: 'auto', marginBottom: 6 }}
+            style={{ marginBottom: 6, ...titleStyle }}
           >
             {slide.title}
           </h2>
@@ -27,7 +34,7 @@ export const VideoConceptSlide: React.FC<VideoConceptSlideProps> = ({ slide }) =
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: titleAlign === 'left' ? 'flex-start' : titleAlign === 'right' ? 'flex-end' : 'center',
               gap: 12,
               marginBottom: 'clamp(18px, 2.5vh, 28px)',
             }}

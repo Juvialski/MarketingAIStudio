@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
-import { PresentationDeck, PresentationSlide } from '../../../types/presentation';
+import { PresentationDeck, PresentationSlide, SlideTitleAlign, SlideBodyAlign } from '../../../types/presentation';
 import { validatePresentationDeck } from '../utils/validatePresentationDeck';
-import { X, Plus, Trash2, ArrowUp, ArrowDown, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react';
+import {
+  X,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertTriangle,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  RotateCcw,
+} from 'lucide-react';
 
 interface SlideEditorModalProps {
   deck: PresentationDeck;
@@ -270,6 +285,114 @@ export const SlideEditorModal: React.FC<SlideEditorModalProps> = ({
                     />
                   </div>
                 )}
+
+                {/* Text Alignment Controls */}
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase text-slate-300 font-medium">
+                      Text Alignment Overrides
+                    </span>
+                    {(selectedSlide.textStyle?.titleAlign || selectedSlide.textStyle?.bodyAlign) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...selectedSlide };
+                          delete updated.textStyle;
+                          handleUpdateSlide(updated);
+                        }}
+                        className="text-[11px] font-mono text-slate-400 hover:text-amber-400 transition-colors flex items-center gap-1"
+                        title="Reset to template defaults"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Reset to Defaults
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Title Alignment */}
+                    <div>
+                      <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1.5">
+                        Title / Headline
+                      </label>
+                      <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                        {(['left', 'center', 'right'] as const).map((align) => {
+                          const isSelected = selectedSlide.textStyle?.titleAlign === align;
+                          const Icon = align === 'left' ? AlignLeft : align === 'center' ? AlignCenter : AlignRight;
+                          return (
+                            <button
+                              key={align}
+                              type="button"
+                              onClick={() => {
+                                const currentStyle = selectedSlide.textStyle || {};
+                                handleUpdateSlide({
+                                  ...selectedSlide,
+                                  textStyle: {
+                                    ...currentStyle,
+                                    titleAlign: align as SlideTitleAlign,
+                                  },
+                                });
+                              }}
+                              aria-label={`Align title ${align}`}
+                              className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded text-xs font-medium transition-all ${
+                                isSelected
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                              }`}
+                            >
+                              <Icon className="w-3.5 h-3.5" />
+                              <span className="capitalize text-[11px]">{align}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Body Alignment */}
+                    <div>
+                      <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1.5">
+                        Body / Narrative
+                      </label>
+                      <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                        {(['left', 'center', 'right', 'justify'] as const).map((align) => {
+                          const isSelected = selectedSlide.textStyle?.bodyAlign === align;
+                          const Icon =
+                            align === 'left'
+                              ? AlignLeft
+                              : align === 'center'
+                              ? AlignCenter
+                              : align === 'right'
+                              ? AlignRight
+                              : AlignJustify;
+                          return (
+                            <button
+                              key={align}
+                              type="button"
+                              onClick={() => {
+                                const currentStyle = selectedSlide.textStyle || {};
+                                handleUpdateSlide({
+                                  ...selectedSlide,
+                                  textStyle: {
+                                    ...currentStyle,
+                                    bodyAlign: align as SlideBodyAlign,
+                                  },
+                                });
+                              }}
+                              aria-label={`Align body ${align}`}
+                              className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded text-xs font-medium transition-all ${
+                                isSelected
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                              }`}
+                            >
+                              <Icon className="w-3.5 h-3.5" />
+                              <span className="capitalize text-[11px]">{align === 'justify' ? 'Justify' : align}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-xs font-mono uppercase text-slate-400 mb-1">

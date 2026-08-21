@@ -7,6 +7,8 @@ export default function Split({
   body,
   media,
   flip,
+  titleAlign = 'left',
+  bodyAlign = 'left',
 }: {
   kicker?: string;
   title: ReactNode;
@@ -15,22 +17,24 @@ export default function Split({
   flip?: boolean;
   nav?: string;
   notes?: string;
+  titleAlign?: 'left' | 'center' | 'right';
+  bodyAlign?: 'left' | 'center' | 'right' | 'justify';
 }) {
   return (
     <div className="slide full">
       <div className={'split' + (flip ? ' flip' : '')}>
-        <div className="split-body">
+        <div className="split-body" style={{ textAlign: titleAlign }}>
           {kicker && (
             <Reveal>
-              <div className="kicker">{kicker}</div>
+              <div className="kicker" style={{ textAlign: titleAlign }}>{kicker}</div>
             </Reveal>
           )}
           <Reveal delay={0.08}>
-            <h2 className="headline">{title}</h2>
+            <h2 className="headline" style={{ textAlign: titleAlign }}>{title}</h2>
           </Reveal>
           {body && (
             <Reveal delay={0.16}>
-              <div className="lead">{body}</div>
+              <div className="lead" style={{ textAlign: bodyAlign }}>{body}</div>
             </Reveal>
           )}
         </div>

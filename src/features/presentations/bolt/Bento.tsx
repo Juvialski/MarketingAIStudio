@@ -18,30 +18,40 @@ export default function Bento({
   kicker,
   title,
   tiles,
+  titleAlign = 'left',
 }: {
   kicker?: string;
   title?: string;
   tiles: BentoTile[];
   nav?: string;
   notes?: string;
+  titleAlign?: 'left' | 'center' | 'right';
 }) {
   const { isStatic } = useDeck();
   const reduce = useReducedMotion();
   const animate = !isStatic && !reduce;
+
+  const marginInline =
+    titleAlign === 'center' ? 'auto' : titleAlign === 'right' ? '0 0 0 auto' : '0 auto 0 0';
 
   return (
     <div className="slide">
       <div className="slide-container">
         <Reveal>
           {kicker && (
-            <div className="kicker" style={{ marginBottom: 10 }}>
+            <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>
               {kicker}
             </div>
           )}
           {title && (
             <h2
               className="headline"
-              style={{ marginBottom: 'clamp(18px,2.5vh,32px)', maxWidth: '28ch' }}
+              style={{
+                marginBottom: 'clamp(18px,2.5vh,32px)',
+                maxWidth: titleAlign === 'center' ? '36ch' : '28ch',
+                textAlign: titleAlign,
+                marginInline,
+              }}
             >
               {title}
             </h2>

@@ -9,16 +9,21 @@ export default function StatGrid({
   kicker,
   title,
   stats,
+  titleAlign = 'center',
 }: {
   kicker?: string;
   title?: string;
   stats: Stat[];
   nav?: string;
   notes?: string;
+  titleAlign?: 'left' | 'center' | 'right';
 }) {
   const { isStatic } = useDeck();
   const reduce = useReducedMotion();
   const animate = !isStatic && !reduce;
+
+  const marginInline =
+    titleAlign === 'left' ? '0 auto 0 0' : titleAlign === 'right' ? '0 0 0 auto' : 'auto';
 
   return (
     <div className="slide">
@@ -27,7 +32,7 @@ export default function StatGrid({
           {kicker && (
             <div
               className="kicker"
-              style={{ marginBottom: 10, textAlign: 'center' }}
+              style={{ marginBottom: 10, textAlign: titleAlign }}
             >
               {kicker}
             </div>
@@ -36,8 +41,8 @@ export default function StatGrid({
             <h2
               className="headline"
               style={{
-                textAlign: 'center',
-                marginInline: 'auto',
+                textAlign: titleAlign,
+                marginInline,
                 marginBottom: 'clamp(20px,3.5vh,40px)',
               }}
             >

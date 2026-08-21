@@ -5,6 +5,12 @@ import { DesignRenderer } from '../../../components/designs/DesignRenderer';
 import Reveal from '../bolt/Reveal';
 import { CreativeShowcaseSlide as CreativeShowcaseSlideType } from '../../../types/presentation';
 import { Layers } from 'lucide-react';
+import {
+  resolveTitleAlign,
+  resolveBodyAlign,
+  getTitleAlignStyle,
+  getBodyAlignStyle,
+} from '../utils/resolveTextAlign';
 
 interface CreativeShowcaseSlideProps {
   slide: CreativeShowcaseSlideType;
@@ -32,30 +38,33 @@ export const CreativeShowcaseSlide: React.FC<CreativeShowcaseSlideProps> = ({
   brandKit,
 }) => {
   const formats = slide.previewFormats || ['square', 'portrait', 'story', 'landscape'];
+  const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+  const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+  const titleStyle = getTitleAlignStyle(titleAlign);
+  const bodyStyle = getBodyAlignStyle(bodyAlign);
 
   return (
-    <div className="slide center">
+    <div className={`slide ${titleAlign === 'center' ? 'center' : ''}`}>
       <div className="slide-container" style={{ maxWidth: 1340 }}>
         <Reveal>
           {slide.kicker && (
-            <div className="kicker" style={{ marginBottom: 8, textAlign: 'center' }}>
+            <div className="kicker" style={{ marginBottom: 8, textAlign: titleAlign }}>
               {slide.kicker}
             </div>
           )}
           <h2
             className="headline"
-            style={{ textAlign: 'center', marginInline: 'auto', marginBottom: 8, fontSize: 38 }}
+            style={{ marginBottom: 8, fontSize: 38, ...titleStyle }}
           >
             {slide.title}
           </h2>
           <p
             className="lead"
             style={{
-              textAlign: 'center',
-              marginInline: 'auto',
               marginBottom: 20,
               fontSize: 17,
               maxWidth: 860,
+              ...bodyStyle,
             }}
           >
             {slide.subtitle || 'Deterministic social graphics and flyers generated in tandem with this investment memorandum.'}

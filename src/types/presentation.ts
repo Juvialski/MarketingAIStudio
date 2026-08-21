@@ -51,6 +51,14 @@ export type PresentationSlideType =
   | 'risk_disclaimer'
   | 'next_steps';
 
+export type SlideTitleAlign = 'left' | 'center' | 'right';
+export type SlideBodyAlign = 'left' | 'center' | 'right' | 'justify';
+
+export interface SlideTextStyle {
+  titleAlign?: SlideTitleAlign;
+  bodyAlign?: SlideBodyAlign;
+}
+
 export interface BaseSlide {
   id: string;
   type: PresentationSlideType;
@@ -59,6 +67,7 @@ export interface BaseSlide {
   title: string;
   speakerNotes?: string;
   isHidden?: boolean;
+  textStyle?: SlideTextStyle;
 }
 
 export interface CoverSlide extends BaseSlide {

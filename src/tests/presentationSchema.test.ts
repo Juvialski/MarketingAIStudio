@@ -441,5 +441,42 @@ describe('presentationSchema (Zod Validation, Contract Alignment & Security)', (
 
     functionsSpy.mockRestore();
   });
+
+  it('validates slide textStyle overrides (titleAlign and bodyAlign) and rejects invalid alignments', () => {
+    const deckWithAlignment = createValidDeck();
+    deckWithAlignment.slides[0].textStyle = {
+      titleAlign: 'center',
+      bodyAlign: 'right',
+    };
+    deckWithAlignment.slides[1].textStyle = {
+      titleAlign: 'right',
+      bodyAlign: 'justify',
+    };
+
+    const parsed = presentationDeckSchema.safeParse(deckWithAlignment);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.slides[0].textStyle?.titleAlign).toBe('center');
+      expect(parsed.data.slides[0].textStyle?.bodyAlign).toBe('right');
+      expect(parsed.data.slides[1].textStyle?.titleAlign).toBe('right');
+      expect(parsed.data.slides[1].textStyle?.bodyAlign).toBe('justify');
+    }
+
+    // Invalid title alignment ('justify' is forbidden for titles)
+    const invalidTitleDeck = createValidDeck();
+    (invalidTitleDeck.slides[0] as any).textStyle = {
+      titleAlign: 'justify',
+    };
+    const invalidTitleResult = presentationDeckSchema.safeParse(invalidTitleDeck);
+    expect(invalidTitleResult.success).toBe(false);
+
+    // Invalid alignment value
+    const invalidValueDeck = createValidDeck();
+    (invalidValueDeck.slides[0] as any).textStyle = {
+      titleAlign: 'diagonal',
+    };
+    const invalidValueResult = presentationDeckSchema.safeParse(invalidValueDeck);
+    expect(invalidValueResult.success).toBe(false);
+  });
 });
 

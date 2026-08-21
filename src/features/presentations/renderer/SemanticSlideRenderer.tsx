@@ -3,6 +3,12 @@ import { PresentationSlide } from '../../../types/presentation';
 import { Campaign } from '../../../types/campaign';
 import { BrandKit } from '../../../types/brandKit';
 import { resolveFactValue } from '../utils/resolveFactValues';
+import {
+  resolveTitleAlign,
+  resolveBodyAlign,
+  getTitleAlignStyle,
+  getBodyAlignStyle,
+} from '../utils/resolveTextAlign';
 import Cover from '../bolt/Cover';
 import Split from '../bolt/Split';
 import Bento, { BentoTile } from '../bolt/Bento';
@@ -38,6 +44,8 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
         campaign?.sourceData.uploadedImages.find((img) => img.isHero)?.url ||
         campaign?.sourceData.uploadedImages[0]?.url;
 
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+
       return (
         <Cover
           kicker={slide.kicker}
@@ -47,17 +55,23 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
           foot={slide.foot}
           notes={slide.speakerNotes}
           nav={slide.navLabel || 'Cover'}
+          titleAlign={titleAlign}
         />
       );
     }
 
     case 'executive_summary': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+      const bodyStyle = getBodyAlignStyle(bodyAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Executive Summary'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Executive Summary'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 16 }}>{slide.title}</h2>
-            <p className="lead" style={{ marginInline: 'auto', marginBottom: 32 }}>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 16, ...titleStyle }}>{slide.title}</h2>
+            <p className="lead" style={{ marginBottom: 32, ...bodyStyle }}>
               {slide.summary}
             </p>
           </Reveal>
@@ -101,6 +115,8 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
         (slide.imageId && campaign?.sourceData.uploadedImages.find((img) => img.id === slide.imageId)?.url) ||
         campaign?.sourceData.uploadedImages[0]?.url;
 
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'left');
+
       const tiles: BentoTile[] = [
         {
           k: 'Location & Address',
@@ -142,17 +158,23 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
           tiles={tiles}
           nav={slide.navLabel || 'Property'}
           notes={slide.speakerNotes}
+          titleAlign={titleAlign}
         />
       );
     }
 
     case 'investment_thesis': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+      const bodyStyle = getBodyAlignStyle(bodyAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Investment Thesis'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Investment Thesis'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 16 }}>{slide.title}</h2>
-            <p className="lead" style={{ marginInline: 'auto', marginBottom: 36 }}>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 16, ...titleStyle }}>{slide.title}</h2>
+            <p className="lead" style={{ marginBottom: 36, ...bodyStyle }}>
               {slide.thesis}
             </p>
           </Reveal>
@@ -192,6 +214,7 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'stat_grid': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
       const stats: Stat[] = slide.stats
         .map((s): Stat | null => {
           let val = s.value;
@@ -218,6 +241,7 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
           stats={stats}
           nav={slide.navLabel || 'Metrics'}
           notes={slide.speakerNotes}
+          titleAlign={titleAlign}
         />
       );
     }
@@ -229,6 +253,9 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
         if (resolved) val = resolved;
       }
 
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+
       return (
         <BigNumber
           kicker={slide.kicker}
@@ -237,11 +264,17 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
           foot={slide.foot}
           nav={slide.navLabel || 'Key Number'}
           notes={slide.speakerNotes}
+          titleAlign={titleAlign}
+          bodyAlign={bodyAlign}
         />
       );
     }
 
     case 'financial_snapshot': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+
       const metrics = slide.metrics
         .map((m) => {
           let val = m.value;
@@ -258,10 +291,10 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
         .filter((m): m is NonNullable<typeof m> => m !== null);
 
       return (
-        <Slide center nav={slide.navLabel || 'Financials'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Financials'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 'clamp(20px, 3vh, 34px)' }}>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 'clamp(20px, 3vh, 34px)', ...titleStyle }}>
               {slide.title}
             </h2>
           </Reveal>
@@ -303,7 +336,12 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
           {slide.disclosures && slide.disclosures.length > 0 && (
             <div
               className="foot"
-              style={{ maxWidth: 850, marginInline: 'auto', textAlign: 'center', opacity: 0.8 }}
+              style={{
+                maxWidth: 850,
+                marginInline: 'auto',
+                textAlign: bodyAlign === 'justify' ? 'left' : bodyAlign,
+                opacity: 0.8,
+              }}
             >
               {slide.disclosures.join(' ')}
             </div>
@@ -313,12 +351,16 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'market_context': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'left');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'left');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+
       return (
         <Slide nav={slide.navLabel || 'Market Context'} notes={slide.speakerNotes}>
           <div className="slide-container" style={{ maxWidth: 1050 }}>
             <Reveal>
-              {slide.kicker && <div className="kicker" style={{ marginBottom: 8 }}>{slide.kicker}</div>}
-              <h2 className="headline" style={{ marginBottom: 8 }}>{slide.title}</h2>
+              {slide.kicker && <div className="kicker" style={{ marginBottom: 8, textAlign: titleAlign }}>{slide.kicker}</div>}
+              <h2 className="headline" style={{ marginBottom: 8, ...titleStyle }}>{slide.title}</h2>
               <div className="chip" style={{ marginBottom: 20 }}>Submarket: {slide.submarket}</div>
             </Reveal>
 
@@ -330,10 +372,10 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
               }}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span className="kicker">Market Dynamics & Drivers</span>
+                <span className="kicker" style={{ textAlign: titleAlign }}>Market Dynamics & Drivers</span>
                 {slide.insights.map((ins, i) => (
                   <div key={i} className="mat" style={{ padding: '14px 16px', borderRadius: 'var(--radius-sm)' }}>
-                    <p style={{ fontSize: 'clamp(13px, 1.3vw, 15px)', color: 'var(--fg)', lineHeight: 1.4 }}>
+                    <p style={{ fontSize: 'clamp(13px, 1.3vw, 15px)', color: 'var(--fg)', lineHeight: 1.4, textAlign: bodyAlign }}>
                       {ins}
                     </p>
                   </div>
@@ -356,11 +398,14 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'timeline': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Timeline'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Timeline'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 'clamp(24px, 3.5vh, 40px)' }}>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 'clamp(24px, 3.5vh, 40px)', ...titleStyle }}>
               {slide.title}
             </h2>
           </Reveal>
@@ -370,6 +415,9 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'gallery': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'left');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'left');
+
       if (slide.layout === 'split' && slide.items[0]) {
         const item = slide.items[0];
         return (
@@ -380,6 +428,8 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
             media={<img src={item.imageUrl} alt={item.title || 'Property view'} />}
             nav={slide.navLabel || 'Gallery'}
             notes={slide.speakerNotes}
+            titleAlign={titleAlign}
+            bodyAlign={bodyAlign}
           />
         );
       }
@@ -399,18 +449,24 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
           tiles={tiles}
           nav={slide.navLabel || 'Gallery'}
           notes={slide.speakerNotes}
+          titleAlign={titleAlign}
         />
       );
     }
 
     case 'target_audience': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+      const bodyStyle = getBodyAlignStyle(bodyAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Target Audience'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Target Audience'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 10 }}>{slide.title}</h2>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 10, ...titleStyle }}>{slide.title}</h2>
             <div className="chip" style={{ marginBottom: 16 }}>{slide.audienceName}</div>
-            <p className="lead" style={{ marginInline: 'auto', marginBottom: 24, fontSize: 'clamp(14px, 1.4vw, 18px)' }}>
+            <p className="lead" style={{ marginBottom: 24, fontSize: 'clamp(14px, 1.4vw, 18px)', ...bodyStyle }}>
               {slide.description}
             </p>
           </Reveal>
@@ -453,12 +509,17 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'marketing_strategy': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+      const bodyStyle = getBodyAlignStyle(bodyAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Marketing Strategy'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Marketing Strategy'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 12 }}>{slide.title}</h2>
-            <p className="lead" style={{ marginInline: 'auto', marginBottom: 24, fontSize: 'clamp(15px, 1.5vw, 20px)' }}>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 12, ...titleStyle }}>{slide.title}</h2>
+            <p className="lead" style={{ marginBottom: 24, fontSize: 'clamp(15px, 1.5vw, 20px)', ...bodyStyle }}>
               "{slide.coreAngle}"
             </p>
           </Reveal>
@@ -509,11 +570,14 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'comparison': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Comparison'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Comparison'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 24 }}>{slide.title}</h2>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 24, ...titleStyle }}>{slide.title}</h2>
           </Reveal>
           <div style={{ width: '100%', maxWidth: 1280, marginInline: 'auto' }}>
             <Comparison
@@ -527,11 +591,14 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'table': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Data'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Data'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 24 }}>{slide.title}</h2>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h2 className="headline" style={{ marginBottom: 24, ...titleStyle }}>{slide.title}</h2>
           </Reveal>
           <Table
             columns={slide.columns}
@@ -545,14 +612,28 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'risk_disclaimer': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'left');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Disclosures'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Disclosures'} notes={slide.speakerNotes}>
           <Reveal>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: '#f5b73a', marginBottom: 14 }}>
-              <ShieldAlert style={{ width: 28, height: 28 }} />
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                color: '#f5b73a',
+                marginBottom: 14,
+                justifyContent: titleAlign === 'center' ? 'center' : titleAlign === 'right' ? 'flex-end' : 'flex-start',
+                width: '100%',
+              }}
+            >
+              <ShieldAlert style={{ width: 28, height: 28, flexShrink: 0 }} />
               <span className="kicker" style={{ color: '#f5b73a', fontSize: 14 }}>Legal & Underwriting Disclosures</span>
             </div>
-            <h2 className="headline" style={{ marginInline: 'auto', marginBottom: 24, fontSize: 38 }}>{slide.title}</h2>
+            <h2 className="headline" style={{ marginBottom: 24, fontSize: 38, ...titleStyle }}>{slide.title}</h2>
           </Reveal>
 
           <div
@@ -563,17 +644,29 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
               width: '100%',
               maxWidth: 1340,
               marginInline: 'auto',
-              textAlign: 'left',
+              textAlign: bodyAlign,
               background: 'rgba(245, 183, 58, 0.05)',
               borderColor: 'rgba(245, 183, 58, 0.25)',
             }}
           >
-            <p style={{ fontSize: 17.5, color: 'var(--fg)', lineHeight: 1.65 }}>
+            <p style={{ fontSize: 17.5, color: 'var(--fg)', lineHeight: 1.65, textAlign: bodyAlign }}>
               {slide.disclaimerText}
             </p>
 
             {slide.additionalCaveats && slide.additionalCaveats.length > 0 && (
-              <ul style={{ margin: '18px 0 0 0', paddingLeft: 22, fontSize: 15, color: 'var(--fg-muted)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <ul
+                style={{
+                  margin: '18px 0 0 0',
+                  paddingLeft: bodyAlign === 'right' ? 0 : 22,
+                  paddingRight: bodyAlign === 'right' ? 22 : 0,
+                  fontSize: 15,
+                  color: 'var(--fg-muted)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  textAlign: bodyAlign,
+                }}
+              >
                 {slide.additionalCaveats.map((c, idx) => (
                   <li key={idx} style={{ lineHeight: 1.5 }}>{c}</li>
                 ))}
@@ -585,12 +678,17 @@ export const SemanticSlideRenderer: React.FC<SemanticSlideRendererProps> = ({
     }
 
     case 'next_steps': {
+      const titleAlign = resolveTitleAlign(slide.textStyle, 'center');
+      const bodyAlign = resolveBodyAlign(slide.textStyle, 'center');
+      const titleStyle = getTitleAlignStyle(titleAlign);
+      const bodyStyle = getBodyAlignStyle(bodyAlign);
+
       return (
-        <Slide center nav={slide.navLabel || 'Next Steps'} notes={slide.speakerNotes}>
+        <Slide center={titleAlign === 'center'} nav={slide.navLabel || 'Next Steps'} notes={slide.speakerNotes}>
           <Reveal>
-            {slide.kicker && <div className="kicker" style={{ marginBottom: 10 }}>{slide.kicker}</div>}
-            <h1 className="display" style={{ marginInline: 'auto', marginBottom: 16 }}>{slide.title}</h1>
-            <p className="lead" style={{ marginInline: 'auto', marginBottom: 36 }}>
+            {slide.kicker && <div className="kicker" style={{ marginBottom: 10, textAlign: titleAlign }}>{slide.kicker}</div>}
+            <h1 className="display" style={{ marginBottom: 16, ...titleStyle }}>{slide.title}</h1>
+            <p className="lead" style={{ marginBottom: 36, ...bodyStyle }}>
               {slide.ctaText}
             </p>
           </Reveal>
