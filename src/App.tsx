@@ -46,14 +46,17 @@ export function App() {
   const { isReviewMode, reviewToken } = useMemo(() => {
     if (typeof window === 'undefined') return { isReviewMode: false, reviewToken: null };
     const pathname = window.location.pathname;
-    const match = pathname.match(/^\/review\/([^/?#]+)/i);
+    const match = pathname.match(/^\/review\/(.+)$/i);
     if (match) {
-      return { isReviewMode: true, reviewToken: decodeURIComponent(match[1]) };
+      const parsedToken = decodeURIComponent(match[1]).replace(/\/+$/, '');
+      if (parsedToken) {
+        return { isReviewMode: true, reviewToken: parsedToken };
+      }
     }
     const params = new URLSearchParams(window.location.search);
     const qReview = params.get('review');
     if (qReview) {
-      return { isReviewMode: true, reviewToken: qReview };
+      return { isReviewMode: true, reviewToken: qReview.trim() };
     }
     return { isReviewMode: false, reviewToken: null };
   }, []);

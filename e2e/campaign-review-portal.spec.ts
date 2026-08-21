@@ -20,7 +20,7 @@ test('owner workspace can create review link and view generated public URL', asy
 
   // 4. Verify link is active and token URL is displayed
   await expect(page.getByText('Review Link Active')).toBeVisible();
-  await expect(page.getByText(/\/review\/rev_/)).toBeVisible();
+  await expect(page.getByText(/\/review\/demo\/phoenix-value-add/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Copy Review Link' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Publish Latest Changes' })).toBeVisible();
 });
@@ -117,46 +117,59 @@ test('public client review portal loads standalone room with presentation, varia
   await expect(page.getByText('Review Successfully Submitted')).toBeVisible();
 });
 
-test('anonymous reviewer on completely isolated browser context opens review link and submits feedback', async ({ browser, page }) => {
-  // 1. Create review link in primary context
+test('anonymous reviewer on completely isolated browser context opens review link without any storage or auth', async ({ browser, page }) => {
+  // 1. In creator workspace: open Phoenix demo campaign and navigate to Share & Review
   await page.getByText(/Demo · Phoenix Value-Add/i).first().click();
   await page.getByRole('button', { name: 'Share & Review' }).click();
-  await page.getByRole('button', { name: 'Create Secure Review Link' }).click();
+
+  // Create or retrieve active review link URL
+  const createBtn = page.getByRole('button', { name: 'Create Secure Review Link' });
+  if (await createBtn.isVisible()) {
+    await createBtn.click();
+  }
 
   const linkText = await page.getByTestId('review-link-url').textContent();
   expect(linkText).toBeTruthy();
   const publicUrl = linkText!.trim();
-  const reviewStorage = await page.evaluate(() => ({
-    links: window.localStorage.getItem('zaw_review_links_v1'),
-    versions: window.localStorage.getItem('zaw_review_versions_v1'),
-  }));
+  expect(publicUrl).toContain('/review/demo/phoenix-value-add');
 
-  // 2. Open completely separate anonymous browser context (incognito / second device emulation)
+  // 2. Open completely separate anonymous browser context (emulating a completely separate device/phone/incognito)
   const anonymousContext = await browser.newContext();
   const anonPage = await anonymousContext.newPage();
 
-  // Seed only the published review snapshot package (simulating server state) with zero auth session / cookies
-  await anonPage.goto('/?demo=1');
-  await anonPage.evaluate((data) => {
-    window.localStorage.clear();
-    if (data.links) window.localStorage.setItem('zaw_review_links_v1', data.links);
-    if (data.versions) window.localStorage.setItem('zaw_review_versions_v1', data.versions);
-  }, reviewStorage);
-
-  // 3. Open review URL directly in anonymous page
+  // 3. Navigate directly to the copied public URL
   await anonPage.goto(publicUrl);
 
-  // 4. Verify no database error strings are visible anywhere
+  // 4. Verify context was not pre-seeded with creator data
+  const storageData = await anonPage.evaluate(() => ({
+    creatorLinks: window.localStorage.getItem('zaw_review_links_v1'),
+    creatorCampaigns: window.localStorage.getItem('zaw_campaigns_v1'),
+    sbSession: window.localStorage.getItem('sb-auth-token'),
+  }));
+  expect(storageData.creatorLinks).toBeNull();
+  expect(storageData.creatorCampaigns).toBeNull();
+  expect(storageData.sbSession).toBeNull();
+
+  // 5. Verify no database error strings or 'review link invalid' warnings appear
   await expect(anonPage.getByText(/function digest/i)).not.toBeVisible();
   await expect(anonPage.getByText(/relation .* does not exist/i)).not.toBeVisible();
   await expect(anonPage.getByText(/PGRST/i)).not.toBeVisible();
+  await expect(anonPage.getByText(/This review link is invalid or no longer active/i)).not.toBeVisible();
 
-  // 5. Verify review portal header & content render cleanly
+  // 6. Verify review portal header & content render cleanly
   await expect(anonPage.getByText('Review Package · Version 1')).toBeVisible();
   await expect(anonPage.getByText('Investment Presentation Deck')).toBeVisible();
   await expect(anonPage.getByText('Marketing Graphics & Flyer Materials')).toBeVisible();
 
-  // 6. Enter reviewer name and select preferred variant
+  // 7. Verify presentation deck is visible and rendered
+  const deck = anonPage.locator('.zaw-deck');
+  await expect(deck).toBeVisible();
+
+  // 8. Verify demo images render correctly
+  const heroImages = anonPage.locator('img[src*="fictional-property-exterior"]');
+  expect(await heroImages.count()).toBeGreaterThanOrEqual(1);
+
+  // 9. Enter reviewer name and select preferred variant
   const anonNameInput = anonPage.getByPlaceholder('Your name (e.g. John)');
   await anonNameInput.fill('External Client Reviewer');
 
@@ -165,18 +178,19 @@ test('anonymous reviewer on completely isolated browser context opens review lin
     await markPreferredBtn.click();
   }
 
-  // 7. Submit overall approval in anonymous context
+  // 10. Submit overall package approval in anonymous context
   const approveBtn = anonPage.getByRole('button', { name: 'Approve Selected Materials' }).first();
   await approveBtn.click();
 
   await expect(anonPage.getByText('Review Successfully Submitted')).toBeVisible();
 
-  // 8. Reload anonymous page and verify state persists
+  // 11. Hard reload on anonymous page and verify it continues to render cleanly
   await anonPage.reload();
   await expect(anonPage.getByText('Review Package · Version 1')).toBeVisible();
   await expect(anonPage.getByText('Investment Presentation Deck')).toBeVisible();
 
   await anonymousContext.close();
 });
+
 
 

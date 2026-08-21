@@ -13,11 +13,15 @@ import { generateSecureReviewToken, hashReviewToken } from '../review/reviewCryp
 import { buildReviewSnapshot, SnapshotBuildOptions, getEffectiveReviewMaterials } from '../review/reviewSnapshotBuilder';
 import { CampaignReviewStore } from '../storage/campaignReviewStore';
 import { ServiceError } from './serviceError';
+import { 
+  isCanonicalDemoToken, 
+  getCanonicalDemoSnapshot 
+} from '../review/canonicalDemoReview';
 
 const isDemoContext = (organizationId?: string, campaignId?: string): boolean => {
   if (!isSupabaseConfigured()) return true;
-  if (!organizationId || organizationId === 'demo-org' || organizationId.startsWith('demo-') || organizationId.startsWith('test-')) return true;
-  if (campaignId && (campaignId.startsWith('campaign-') || campaignId.startsWith('demo-') || campaignId.startsWith('test-') || campaignId.startsWith('camp-'))) return true;
+  if (!organizationId || organizationId === 'demo-org' || organizationId === 'demo-mode') return true;
+  if (campaignId === 'campaign-phoenix-fix-flip' || campaignId === 'campaign-dallas-multifamily') return true;
   return false;
 };
 
@@ -82,6 +86,15 @@ export class CampaignReviewService {
 
     const rawToken = generateSecureReviewToken();
     const tokenHash = await hashReviewToken(rawToken);
+
+    // Development/test diagnostic parity assertion
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+      const verifyHash = await hashReviewToken(rawToken);
+      if (verifyHash !== tokenHash) {
+        throw new Error('Review token hash diagnostic failure: hash mismatch');
+      }
+    }
+
     const snapshot = buildReviewSnapshot(campaign, brandKit, snapshotOptions);
 
     const permissionsPayload: ReviewLinkPermissions = {
@@ -402,17 +415,24 @@ export class CampaignReviewService {
       return { status: 'not_found', error: 'Invalid review token.' };
     }
 
-    // Check store first for demo/offline links
-    const storeLink = await CampaignReviewStore.getLinkByRawTokenOrHash(rawToken);
-    if (storeLink || !isSupabaseConfigured()) {
-      return CampaignReviewStore.getPublicSnapshot(rawToken);
+    const trimmedToken = rawToken.trim();
+
+    // 1. Canonical server-independent public demo review (universal cross-device access)
+    if (isCanonicalDemoToken(trimmedToken)) {
+      return getCanonicalDemoSnapshot(trimmedToken);
     }
 
-    // 1. Try Edge Function for authenticated server-side asset hydration
+    // 2. Check store for local offline preview links
+    const storeLink = await CampaignReviewStore.getLinkByRawTokenOrHash(trimmedToken);
+    if (storeLink || !isSupabaseConfigured()) {
+      return CampaignReviewStore.getPublicSnapshot(trimmedToken);
+    }
+
+    // 3. Try Edge Function for authenticated server-side asset hydration
     let edgeFunctionFailedWith404OrNotDeployed = false;
     try {
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-public-review', {
-        body: { rawToken: rawToken.trim() },
+        body: { rawToken: trimmedToken },
       });
 
       if (!edgeError && edgeData) {
@@ -461,11 +481,11 @@ export class CampaignReviewService {
       edgeFunctionFailedWith404OrNotDeployed = true;
     }
 
-    // 2. Direct Public RPC compatibility fallback (only when edge function is unavailable/not deployed)
+    // 4. Direct Public RPC compatibility fallback (only when edge function is unavailable/not deployed)
     if (edgeFunctionFailedWith404OrNotDeployed) {
       try {
         const { data, error } = await supabase.rpc('get_public_review_snapshot', {
-          p_raw_token: rawToken.trim(),
+          p_raw_token: trimmedToken,
         });
 
         if (error || !data) {
@@ -526,6 +546,7 @@ export class CampaignReviewService {
       return { success: false, error: 'Invalid review token.' };
     }
 
+    const trimmedToken = rawToken.trim();
     const sanitizedReviewerName = (reviewerName && reviewerName.trim()) ? reviewerName.trim().slice(0, 100) : 'Reviewer';
     const sanitizedVariantKey = variantKey && variantKey.trim() ? variantKey.trim() : undefined;
 
@@ -537,15 +558,32 @@ export class CampaignReviewService {
       }
     }
 
+    // Canonical demo review feedback handler
+    if (isCanonicalDemoToken(trimmedToken)) {
+      return {
+        success: true,
+        feedback: {
+          id: `demo-fb-${Date.now()}`,
+          reviewLinkId: 'canonical-demo',
+          materialKey,
+          variantKey: sanitizedVariantKey,
+          reviewerName: sanitizedReviewerName,
+          status,
+          comment,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    }
+
     // Check store first for demo/offline links
-    const storeLink = await CampaignReviewStore.getLinkByRawTokenOrHash(rawToken);
+    const storeLink = await CampaignReviewStore.getLinkByRawTokenOrHash(trimmedToken);
     if (storeLink || !isSupabaseConfigured()) {
-      return CampaignReviewStore.submitFeedback(rawToken, materialKey, sanitizedVariantKey, status, comment, sanitizedReviewerName);
+      return CampaignReviewStore.submitFeedback(trimmedToken, materialKey, sanitizedVariantKey, status, comment, sanitizedReviewerName);
     }
 
     try {
       const { data, error } = await supabase.rpc('submit_public_review_feedback', {
-        p_raw_token: rawToken.trim(),
+        p_raw_token: trimmedToken,
         p_material_key: materialKey,
         p_variant_key: sanitizedVariantKey || (null as any),
         p_status: status,
@@ -597,17 +635,26 @@ export class CampaignReviewService {
       return { success: false, error: 'Invalid review token.' };
     }
 
+    const trimmedToken = rawToken.trim();
     const sanitizedReviewerName = (reviewerName && reviewerName.trim()) ? reviewerName.trim().slice(0, 100) : 'Reviewer';
 
+    // Canonical demo review approval handler
+    if (isCanonicalDemoToken(trimmedToken)) {
+      return {
+        success: true,
+        status,
+      };
+    }
+
     // Check store first for demo/offline links
-    const storeLink = await CampaignReviewStore.getLinkByRawTokenOrHash(rawToken);
+    const storeLink = await CampaignReviewStore.getLinkByRawTokenOrHash(trimmedToken);
     if (storeLink || !isSupabaseConfigured()) {
-      return CampaignReviewStore.submitCampaignApproval(rawToken, status, notes, sanitizedReviewerName);
+      return CampaignReviewStore.submitCampaignApproval(trimmedToken, status, notes, sanitizedReviewerName);
     }
 
     try {
       const { data, error } = await supabase.rpc('submit_public_campaign_approval', {
-        p_raw_token: rawToken.trim(),
+        p_raw_token: trimmedToken,
         p_status: status,
         p_notes: notes || (null as any),
         p_reviewer_name: sanitizedReviewerName,

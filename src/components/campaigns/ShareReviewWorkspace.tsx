@@ -10,6 +10,7 @@ import {
 import { CampaignReviewService } from '../../services/supabase/campaignReviewService';
 import { MarketingKitZipExporter } from '../../services/export/marketingKitZip';
 import { getEffectiveReviewMaterials } from '../../services/review/reviewSnapshotBuilder';
+import { getCanonicalPublicDemoUrl } from '../../services/review/canonicalDemoReview';
 import { 
   Share2, 
   Copy, 
@@ -277,13 +278,25 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
     onUpdateCampaign(updatedCampaign);
   };
 
-  // Build public link URL (ONLY when rawToken is available — never slice stored token hash!)
+  const isDemoCampaign = useMemo(() => {
+    return (
+      campaign.id === 'campaign-phoenix-fix-flip' ||
+      campaign.id === 'campaign-dallas-multifamily' ||
+      organizationId === 'demo-org' ||
+      organizationId === 'demo-mode'
+    );
+  }, [campaign.id, organizationId]);
+
+  // Build public link URL
   const publicReviewUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
+    if (isDemoCampaign) {
+      return getCanonicalPublicDemoUrl(campaign.id);
+    }
     const tokenToUse = rawToken || (activeLink?.rawToken ?? null);
     if (!tokenToUse) return '';
     return `${window.location.origin}/review/${tokenToUse}`;
-  }, [rawToken, activeLink]);
+  }, [rawToken, activeLink, isDemoCampaign, campaign.id]);
 
   const handleCopyLink = () => {
     if (!publicReviewUrl) return;
@@ -493,7 +506,9 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
                   )}
                 </div>
                 <div className="text-xs text-slate-400 font-mono">
-                  Cryptographically secure token with SHA-256 server-side verification
+                  {isDemoCampaign
+                    ? 'Canonical public demo link — accessible on any device without login'
+                    : 'Cryptographically secure token with SHA-256 server-side verification'}
                 </div>
               </div>
             </div>
