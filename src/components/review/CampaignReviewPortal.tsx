@@ -373,81 +373,91 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
       {/* 1. Top Client Review Header */}
-      <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
-        {/* Brand & Property Title */}
-        <div className="flex items-center gap-3.5">
-          {snapshot.brandKit.logoUrl && !logoError ? (
-            <img 
-              src={snapshot.brandKit.logoUrl} 
-              alt={snapshot.brandKit.companyName} 
-              onError={() => setLogoError(true)}
-              className="h-8 max-w-[120px] object-contain"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-xs">
-              {snapshot.brandKit.companyName.charAt(0)}
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+      <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5">
+        <div className="max-w-[1920px] mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 sm:gap-3 lg:gap-4">
+          {/* Brand & Title Area */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 min-w-0">
+            {/* ROW 1 (mobile): Logo & Badge */}
+            <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0">
+              {snapshot.brandKit.logoUrl && !logoError ? (
+                <img 
+                  src={snapshot.brandKit.logoUrl} 
+                  alt={snapshot.brandKit.companyName} 
+                  onError={() => setLogoError(true)}
+                  className="h-7 sm:h-8 max-w-[110px] sm:max-w-[130px] object-contain shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0">
+                  {snapshot.brandKit.companyName.charAt(0)}
+                </div>
+              )}
+
+              <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 shrink-0">
                 Review Package · Version {versionNumber}
               </span>
-              <span className="text-xs text-slate-400 font-mono hidden sm:inline-flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-slate-500" />
-                {snapshot.targetMarket}
-              </span>
             </div>
-            <h1 className="text-sm sm:text-base font-serif font-bold text-white tracking-tight mt-0.5">
-              {snapshot.campaignTitle}
-            </h1>
-          </div>
-        </div>
 
-        {/* Reviewer Name & Progress Actions */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
-            <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="text"
-              value={reviewerName}
-              onChange={(e) => handleReviewerNameChange(e.target.value)}
-              placeholder="Your name (e.g. John)"
-              className="bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none w-28 sm:w-36"
-            />
+            {/* ROW 2 (mobile): Title & Location */}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                <span className="inline-flex items-center gap-1 text-slate-400 truncate">
+                  <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                  <span className="truncate">{snapshot.targetMarket}</span>
+                </span>
+              </div>
+              <h1 className="text-sm sm:text-base font-serif font-bold text-white tracking-tight truncate mt-0.5">
+                {snapshot.campaignTitle}
+              </h1>
+            </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono text-slate-300">
-            <span className="text-amber-400 font-bold">{reviewedCount}</span>
-            <span className="text-slate-500">/</span>
-            <span>{totalItems} Reviewed</span>
-          </div>
+          {/* ROW 3 (mobile): Reviewer Name, Progress & Approve CTA */}
+          <div className="flex items-center gap-2 sm:gap-3 pt-1.5 md:pt-0 border-t border-slate-800/60 md:border-0 justify-between md:justify-end">
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-2.5 sm:px-3 py-1.5 rounded-xl flex-1 md:flex-initial min-h-[44px]">
+              <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={reviewerName}
+                onChange={(e) => handleReviewerNameChange(e.target.value)}
+                placeholder="Your name (e.g. John)"
+                className="bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none w-full md:w-36 min-w-0"
+              />
+            </div>
 
-          {permissions.allowApproval && (
-            <button
-              onClick={() => {
-                const el = document.getElementById('campaign-approval-section');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Check className="w-4 h-4" />
-              <span className="hidden sm:inline">Approve Package</span>
-            </button>
-          )}
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-mono text-slate-300 min-h-[44px] shrink-0">
+              <span className="text-amber-400 font-bold">{reviewedCount}</span>
+              <span className="text-slate-500">/</span>
+              <span>{totalItems}</span>
+              <span className="hidden sm:inline"> Reviewed</span>
+            </div>
+
+            {permissions.allowApproval && (
+              <button
+                onClick={() => {
+                  const el = document.getElementById('campaign-approval-section');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-3 sm:px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow transition-colors flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px] shrink-0"
+              >
+                <Check className="w-4 h-4 shrink-0" />
+                <span className="whitespace-nowrap">Approve</span>
+                <span className="hidden sm:inline whitespace-nowrap"> Package</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Main Review Portal Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-12">
+      <main className="flex-1 max-w-[1920px] w-full mx-auto px-3 sm:px-6 lg:px-8 xl:px-12 py-4 sm:py-6 lg:py-8 space-y-6 sm:space-y-8 lg:space-y-12 overflow-x-hidden">
         {/* 2. Overview Section */}
-        <section className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 shadow-2xl space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
             {/* Hero Image or Branded Placeholder */}
             {snapshot.heroImageUrl && snapshot.heroImageUrl.trim() !== '' && !heroImageError ? (
-              <div className="lg:col-span-5 aspect-[4/3] rounded-2xl overflow-hidden shadow-xl border border-slate-800 bg-slate-950 relative group">
+              <div className="lg:col-span-5 aspect-[16/9] sm:aspect-[4/3] rounded-xl sm:rounded-2xl overflow-hidden shadow-xl border border-slate-800 bg-slate-950 relative group">
                 <img
                   src={snapshot.heroImageUrl}
                   alt={snapshot.campaignTitle}
@@ -459,7 +469,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                 </div>
               </div>
             ) : (
-              <div className="lg:col-span-5 aspect-[4/3] rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 p-6 flex flex-col items-center justify-center text-center">
+              <div className="lg:col-span-5 aspect-[16/9] sm:aspect-[4/3] rounded-xl sm:rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 p-6 flex flex-col items-center justify-center text-center">
                 <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
                   <MapPin className="w-6 h-6 text-slate-500" />
                 </div>
@@ -473,12 +483,12 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
             )}
 
             {/* Investment Highlights */}
-            <div className="lg:col-span-7 space-y-5">
+            <div className="lg:col-span-7 space-y-4 sm:space-y-5 flex flex-col justify-center min-w-0">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400 bg-slate-800 px-2.5 py-1 rounded">
                   {snapshot.campaignType.replace(/_/g, ' ').toUpperCase()}
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white mt-2">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold text-white mt-2 leading-tight break-words">
                   {snapshot.property?.investmentThesis || snapshot.campaignTitle}
                 </h2>
                 {snapshot.strategy?.coreAngle && (
@@ -490,43 +500,43 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
 
               {/* Financial Metrics Cards */}
               {snapshot.property?.financials && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
                   {snapshot.property.financials.purchasePrice && (
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] font-mono text-slate-400 uppercase">Purchase Basis</div>
-                      <div className="text-base font-bold text-white font-mono">
+                    <div className="bg-slate-950/60 p-2.5 sm:p-3 rounded-xl border border-slate-800 min-w-0">
+                      <div className="text-[10px] font-mono text-slate-400 uppercase truncate">Purchase Basis</div>
+                      <div className="text-sm sm:text-base font-bold text-white font-mono truncate">
                         ${snapshot.property.financials.purchasePrice.toLocaleString()}
                       </div>
                     </div>
                   )}
                   {snapshot.property.financials.renovationEstimate && (
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] font-mono text-slate-400 uppercase">Est. Renovation</div>
-                      <div className="text-base font-bold text-amber-400 font-mono">
+                    <div className="bg-slate-950/60 p-2.5 sm:p-3 rounded-xl border border-slate-800 min-w-0">
+                      <div className="text-[10px] font-mono text-slate-400 uppercase truncate">Est. Renovation</div>
+                      <div className="text-sm sm:text-base font-bold text-amber-400 font-mono truncate">
                         ${snapshot.property.financials.renovationEstimate.toLocaleString()}
                       </div>
                     </div>
                   )}
                   {snapshot.property.financials.arv && (
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] font-mono text-slate-400 uppercase">Target ARV</div>
-                      <div className="text-base font-bold text-emerald-400 font-mono">
+                    <div className="bg-slate-950/60 p-2.5 sm:p-3 rounded-xl border border-slate-800 min-w-0">
+                      <div className="text-[10px] font-mono text-slate-400 uppercase truncate">Target ARV</div>
+                      <div className="text-sm sm:text-base font-bold text-emerald-400 font-mono truncate">
                         ${snapshot.property.financials.arv.toLocaleString()}
                       </div>
                     </div>
                   )}
                   {snapshot.property.financials.equitySpread && (
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] font-mono text-slate-400 uppercase">Gross Spread</div>
-                      <div className="text-base font-bold text-emerald-400 font-mono">
+                    <div className="bg-slate-950/60 p-2.5 sm:p-3 rounded-xl border border-slate-800 min-w-0">
+                      <div className="text-[10px] font-mono text-slate-400 uppercase truncate">Gross Spread</div>
+                      <div className="text-sm sm:text-base font-bold text-emerald-400 font-mono truncate">
                         ${snapshot.property.financials.equitySpread.toLocaleString()}
                       </div>
                     </div>
                   )}
                   {snapshot.property.financials.roiPercent && (
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] font-mono text-slate-400 uppercase">Projected ROI</div>
-                      <div className="text-base font-bold text-amber-300 font-mono">
+                    <div className="bg-slate-950/60 p-2.5 sm:p-3 rounded-xl border border-slate-800 min-w-0">
+                      <div className="text-[10px] font-mono text-slate-400 uppercase truncate">Projected ROI</div>
+                      <div className="text-sm sm:text-base font-bold text-amber-300 font-mono truncate">
                         {snapshot.property.financials.roiPercent}%
                       </div>
                     </div>
@@ -536,13 +546,13 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
 
               {/* Deal Highlights */}
               {snapshot.property?.dealHighlights && snapshot.property.dealHighlights.length > 0 && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 max-w-3xl">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">Key Offer Highlights</h4>
                   <ul className="space-y-1">
                     {snapshot.property.dealHighlights.slice(0, 3).map((hl, i) => (
                       <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
-                        <span className="text-amber-400 font-bold">✓</span>
-                        <span>{hl}</span>
+                        <span className="text-amber-400 font-bold shrink-0">✓</span>
+                        <span className="break-words">{hl}</span>
                       </li>
                     ))}
                   </ul>
@@ -555,12 +565,12 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
         {/* 3. Investment Presentation Section */}
         {snapshot.presentation && (
           <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-bold">
                   CANONICAL 16:9 DECK
                 </span>
-                <h3 className="text-xl font-serif font-bold text-white mt-1">
+                <h3 className="text-lg sm:text-xl font-serif font-bold text-white mt-1">
                   Investment Presentation Deck
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -568,21 +578,21 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center">
                 <button
                   onClick={() => {
                     presentationRef.current?.toggleFullscreen();
                   }}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                 >
-                  <Presentation className="w-4 h-4" />
+                  <Presentation className="w-4 h-4 shrink-0" />
                   <span>Present Fullscreen</span>
                 </button>
               </div>
             </div>
 
             {/* Embedded 16:9 Container */}
-            <div className="w-full aspect-[16/9] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl relative flex items-center justify-center">
+            <div className="w-full aspect-[16/9] bg-slate-950 rounded-xl sm:rounded-2xl overflow-hidden border border-slate-800 shadow-2xl relative flex items-center justify-center">
               <PresentationRenderer
                 ref={presentationRef}
                 deck={snapshot.presentation}
@@ -596,12 +606,12 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
 
         {/* 4. Social, Web & Print Graphic Materials */}
         <section className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
               <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-bold">
                 CREATIVE SUITE
               </span>
-              <h3 className="text-xl font-serif font-bold text-white mt-1">
+              <h3 className="text-lg sm:text-xl font-serif font-bold text-white mt-1">
                 Marketing Graphics & Flyer Materials
               </h3>
               <p className="text-xs text-slate-400">
@@ -610,7 +620,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
             </div>
 
             {/* Category Filter Pills */}
-            <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
               {[
                 { id: 'all' as const, label: 'All Formats' },
                 { id: 'social' as const, label: 'Social' },
@@ -620,7 +630,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                 <button
                   key={tab.id}
                   onClick={() => setSelectedCategory(tab.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all min-h-[36px] ${
                     selectedCategory === tab.id
                       ? 'bg-amber-500 text-slate-950 font-bold shadow'
                       : 'text-slate-400 hover:text-white'
@@ -633,7 +643,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
           </div>
 
           {/* Graphic Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {filteredMaterials.map((material) => {
               const activeVariantId = activeVariantMap[material.id] || material.variants[0]?.id;
               const activeVariant = material.variants.find((v) => v.id === activeVariantId) || material.variants[0];
@@ -646,30 +656,30 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                   className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col hover:border-slate-700 transition-all"
                 >
                   {/* Card Header */}
-                  <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-                    <div>
+                  <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 min-w-0">
+                    <div className="min-w-0 pr-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded shrink-0">
                           {material.format.replace('_', ' ').toUpperCase()}
                         </span>
-                        <span className="text-[11px] font-mono text-slate-400">
+                        <span className="text-[11px] font-mono text-slate-400 shrink-0">
                           {material.dimensions.width}×{material.dimensions.height}
                         </span>
                       </div>
-                      <h4 className="text-sm font-bold text-white mt-1">{material.label}</h4>
+                      <h4 className="text-sm font-bold text-white mt-1 truncate">{material.label}</h4>
                     </div>
 
                     {isPreferred && (
-                      <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-full flex items-center gap-1 font-bold">
-                        <Star className="w-3 h-3 fill-emerald-400" />
-                        PREFERRED
+                      <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded-full flex items-center gap-1 font-bold shrink-0">
+                        <Star className="w-3 h-3 fill-emerald-400 shrink-0" />
+                        <span className="hidden sm:inline">PREFERRED</span>
                       </span>
                     )}
                   </div>
 
                   {/* Scaled Preview Box */}
-                  <div className="p-4 bg-slate-950 flex items-center justify-center min-h-[300px] relative group">
-                    <div className="w-full max-w-[280px] rounded-lg overflow-hidden shadow">
+                  <div className="p-3 sm:p-4 bg-slate-950 flex items-center justify-center min-h-[260px] sm:min-h-[300px] relative group">
+                    <div className="w-full max-w-sm sm:max-w-none rounded-lg overflow-hidden shadow flex items-center justify-center">
                       <DesignRenderer
                         campaign={simulatedCampaign}
                         aspectRatio={material.format}
@@ -679,10 +689,10 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                     </div>
 
                     {/* Hover Inspect Overlay */}
-                    <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-xs">
+                    <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5 sm:gap-3 backdrop-blur-xs p-4">
                       <button
                         onClick={() => setInspectingMaterial(material)}
-                        className="px-3.5 py-2 bg-white text-slate-950 rounded-xl text-xs font-bold shadow-lg flex items-center gap-1.5 hover:bg-slate-100 cursor-pointer"
+                        className="px-3.5 py-2 bg-white text-slate-950 rounded-xl text-xs font-bold shadow-lg flex items-center gap-1.5 hover:bg-slate-100 cursor-pointer min-h-[44px]"
                       >
                         <Maximize2 className="w-3.5 h-3.5" />
                         <span>Inspect</span>
@@ -690,7 +700,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                       {material.variants.length > 1 && (
                         <button
                           onClick={() => setComparingMaterial(material)}
-                          className="px-3.5 py-2 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold shadow-lg flex items-center gap-1.5 hover:bg-amber-400 cursor-pointer"
+                          className="px-3.5 py-2 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold shadow-lg flex items-center gap-1.5 hover:bg-amber-400 cursor-pointer min-h-[44px]"
                         >
                           <Columns className="w-3.5 h-3.5" />
                           <span>Compare ({material.variants.length})</span>
@@ -700,10 +710,10 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                   </div>
 
                   {/* Variant Selection & Actions */}
-                  <div className="p-4 border-t border-slate-800 space-y-3 mt-auto bg-slate-950/40">
+                  <div className="p-3.5 sm:p-4 border-t border-slate-800 space-y-3 mt-auto bg-slate-950/40">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-mono text-slate-400">Direction:</span>
-                      <span className="font-bold text-amber-400">{activeVariant.name}</span>
+                      <span className="font-bold text-amber-400 truncate ml-2">{activeVariant.name}</span>
                     </div>
 
                     {/* Variant Pills */}
@@ -713,7 +723,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                           <button
                             key={v.id}
                             onClick={() => setActiveVariantMap((prev) => ({ ...prev, [material.id]: v.id }))}
-                            className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
+                            className={`px-2 py-1 rounded text-[10px] font-mono transition-colors whitespace-nowrap ${
                               v.id === activeVariant.id
                                 ? 'bg-amber-500 text-slate-950 font-bold'
                                 : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -726,27 +736,27 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex items-center gap-2 pt-2">
+                    <div className="flex items-center gap-2 pt-1 sm:pt-2">
                       {permissions.allowSelection && (
                         <button
                           onClick={() => handleMarkPreferred(material.id, activeVariant.id)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all min-h-[44px] ${
                             isPreferred
                               ? 'bg-emerald-500 text-slate-950 font-bold'
                               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
                           }`}
                         >
-                          <Star className="w-3.5 h-3.5" />
+                          <Star className="w-3.5 h-3.5 shrink-0" />
                           <span>{isPreferred ? '✓ Preferred' : 'Mark Preferred'}</span>
                         </button>
                       )}
 
                       <button
                         onClick={() => setInspectingMaterial(material)}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700"
+                        className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
                         title="Fullscreen Lightbox"
                       >
-                        <Maximize2 className="w-4 h-4" />
+                        <Maximize2 className="w-4 h-4 shrink-0" />
                       </button>
                     </div>
                   </div>
@@ -762,7 +772,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
             <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-bold">
               WRITTEN ASSETS & SCRIPTS
             </span>
-            <h3 className="text-xl font-serif font-bold text-white mt-1">
+            <h3 className="text-lg sm:text-xl font-serif font-bold text-white mt-1">
               Social Copy & Video Script Package
             </h3>
             <p className="text-xs text-slate-400">
@@ -770,21 +780,21 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Copy Channel Cards */}
             {snapshot.copyChannels.map((ch) => (
-              <div key={ch.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-amber-400" />
-                    <h4 className="text-sm font-bold text-white">{ch.channelName}</h4>
+              <div key={ch.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <MessageSquare className="w-4 h-4 text-amber-400 shrink-0" />
+                    <h4 className="text-sm font-bold text-white truncate">{ch.channelName}</h4>
                   </div>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`${ch.headline}\n\n${ch.body}\n\n${ch.cta}`);
                       alert('Copied to clipboard!');
                     }}
-                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1"
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1 shrink-0 min-h-[36px]"
                     title="Copy text"
                   >
                     <Copy className="w-3.5 h-3.5" />
@@ -793,13 +803,13 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-bold text-amber-300">{ch.headline}</div>
-                  <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  <div className="text-xs font-bold text-amber-300 break-words">{ch.headline}</div>
+                  <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed break-words">
                     {ch.body}
                   </p>
-                  <div className="text-xs font-semibold text-emerald-400 pt-1">CTA: {ch.cta}</div>
+                  <div className="text-xs font-semibold text-emerald-400 pt-1 break-words">CTA: {ch.cta}</div>
                   {ch.hashtags && ch.hashtags.length > 0 && (
-                    <div className="text-[11px] text-slate-500 font-mono">
+                    <div className="text-[11px] text-slate-500 font-mono break-words">
                       {ch.hashtags.join(' ')}
                     </div>
                   )}
@@ -809,35 +819,35 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
 
             {/* Video Script Card */}
             {snapshot.videoScript && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4 md:col-span-2">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 md:col-span-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <Film className="w-4 h-4 text-amber-400" />
+                    <Film className="w-4 h-4 text-amber-400 shrink-0" />
                     <h4 className="text-sm font-bold text-white">9:16 Short-Form Reel Script</h4>
-                    <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded shrink-0">
                       {snapshot.videoScript.durationSeconds}s Target Duration
                     </span>
                   </div>
-                  <span className="text-xs font-mono text-emerald-400 font-bold">
+                  <span className="text-xs font-mono text-emerald-400 font-bold break-words">
                     Hook: {snapshot.videoScript.hook}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                   {snapshot.videoScript.scenes.map((sc, idx) => (
-                    <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <div key={idx} className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between text-[10px] font-mono text-amber-400">
                         <span>SCENE {idx + 1}</span>
                         <span>{sc.timeframe}</span>
                       </div>
-                      <div className="text-xs text-slate-300">
+                      <div className="text-xs text-slate-300 break-words">
                         <span className="text-slate-500 font-mono">Visual:</span> {sc.visualDirection}
                       </div>
-                      <div className="text-xs text-white italic">
+                      <div className="text-xs text-white italic break-words">
                         "{sc.spokenAudio}"
                       </div>
                       {sc.onScreenText && (
-                        <div className="text-[10px] text-amber-300 font-mono bg-amber-500/10 px-2 py-1 rounded">
+                        <div className="text-[10px] text-amber-300 font-mono bg-amber-500/10 px-2 py-1 rounded break-words">
                           Text: {sc.onScreenText}
                         </div>
                       )}
@@ -851,12 +861,12 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
 
         {/* 6. Overall Campaign Approval & Review Submission Section */}
         {permissions.allowApproval && (
-          <section id="campaign-approval-section" className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-6">
+          <section id="campaign-approval-section" className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-8 lg:p-10 shadow-2xl space-y-6">
             <div className="max-w-2xl mx-auto text-center space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-2xl font-serif font-bold text-white">
+              <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">
                 Submit Campaign Review Decision
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -887,9 +897,9 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                   <button
                     onClick={handleApproveOverallCampaign}
                     disabled={isApprovingCampaign}
-                    className="w-full sm:flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full sm:flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 min-h-[44px]"
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className="w-4 h-4 shrink-0" />
                     <span>{isApprovingCampaign ? 'Submitting Approval...' : 'Approve Selected Materials'}</span>
                   </button>
                   <button
@@ -902,7 +912,7 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
                       );
                       alert('Feedback recorded as Needs Changes.');
                     }}
-                    className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-700 transition-colors"
+                    className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-700 transition-colors min-h-[44px]"
                   >
                     Request Revisions
                   </button>
@@ -915,10 +925,10 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
         {/* 7. Legal Disclaimer Footer */}
         <footer className="border-t border-slate-900 pt-8 pb-12 text-center space-y-3">
           <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-mono">
-            <Shield className="w-3.5 h-3.5" />
-            <span>CONFIDENTIAL CLIENT REVIEW ROOM · {snapshot.brandKit.companyName}</span>
+            <Shield className="w-3.5 h-3.5 shrink-0" />
+            <span className="break-words">CONFIDENTIAL CLIENT REVIEW ROOM · {snapshot.brandKit.companyName}</span>
           </div>
-          <p className="text-[11px] text-slate-500 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-[11px] text-slate-500 max-w-3xl mx-auto leading-relaxed break-words">
             {snapshot.brandKit.disclaimer}
           </p>
         </footer>

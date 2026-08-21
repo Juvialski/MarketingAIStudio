@@ -192,5 +192,56 @@ test('anonymous reviewer on completely isolated browser context opens review lin
   await anonymousContext.close();
 });
 
+test('public client review portal responsive layout across mobile, tablet, and wide desktop viewports', async ({ page }) => {
+  // 1. Create review link in creator workspace
+  await page.getByText(/Demo · Phoenix Value-Add/i).first().click();
+  await page.getByRole('button', { name: 'Share & Review' }).click();
+
+  const createBtn = page.getByRole('button', { name: 'Create Secure Review Link' });
+  if (await createBtn.isVisible()) {
+    await createBtn.click();
+  }
+
+  const linkText = await page.getByTestId('review-link-url').textContent();
+  expect(linkText).toBeTruthy();
+  const publicUrl = linkText!.trim();
+
+  // 2. Mobile 390px viewport test
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(publicUrl);
+  await expect(page.getByText('Review Package · Version 1')).toBeVisible();
+
+  // Assert no horizontal scrolling on 390px phone
+  const scrollWidth390 = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth390).toBeLessThanOrEqual(390);
+
+  // Assert mobile header elements present
+  await expect(page.getByPlaceholder('Your name (e.g. John)')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Approve/i }).first()).toBeVisible();
+
+  // 3. Tablet 768px viewport test
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(page.getByText('Investment Presentation Deck')).toBeVisible();
+  const scrollWidth768 = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth768).toBeLessThanOrEqual(768);
+
+  // 4. Desktop 1440px viewport test
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const deckHost1440 = page.locator('.zaw-deck').first();
+  await expect(deckHost1440).toBeVisible();
+  const box1440 = await page.locator('section:has-text("Investment Presentation Deck") .aspect-\\[16\\/9\\]').boundingBox();
+  expect(box1440).toBeTruthy();
+  const width1440 = box1440!.width;
+
+  // 5. Ultrawide / 4K Desktop 1920px viewport test
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const box1920 = await page.locator('section:has-text("Investment Presentation Deck") .aspect-\\[16\\/9\\]').boundingBox();
+  expect(box1920).toBeTruthy();
+  const width1920 = box1920!.width;
+
+  // Presentation width should meaningfully expand from 1440px screen to 1920px screen
+  expect(width1920).toBeGreaterThan(width1440 + 200);
+});
+
 
 

@@ -21,6 +21,20 @@ async function expectCanvasContract(
     await expect(canvas).toHaveAttribute('data-template-family', expectedFamily);
   }
 
+  await canvas.evaluate(async (element) => {
+    const imgs = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
+    await Promise.all(
+      imgs.map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise((res) => {
+              img.onload = res;
+              img.onerror = res;
+            })
+      )
+    );
+  });
+
   const health = await canvas.evaluate((element) => {
     const images = (Array.from(element.querySelectorAll('img')) as HTMLImageElement[]).map((image) => ({
       complete: image.complete,
