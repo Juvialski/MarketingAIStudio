@@ -110,8 +110,8 @@ export const CampaignReviewPortal: React.FC<CampaignReviewPortalProps> = ({ toke
       setActiveVariantMap(initialMap);
     } catch (e: unknown) {
       setAccessStatus('not_found');
-      const errText = e instanceof Error ? e.message : 'Failed to load review portal.';
-      setErrorMessage(errText);
+      console.error('[CampaignReviewPortal] Load error:', e);
+      setErrorMessage(CampaignReviewService.SAFE_GENERIC_ERROR);
     } finally {
       setLoading(false);
     }

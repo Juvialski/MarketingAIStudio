@@ -117,3 +117,66 @@ test('public client review portal loads standalone room with presentation, varia
   await expect(page.getByText('Review Successfully Submitted')).toBeVisible();
 });
 
+test('anonymous reviewer on completely isolated browser context opens review link and submits feedback', async ({ browser, page }) => {
+  // 1. Create review link in primary context
+  await page.getByText(/Demo · Phoenix Value-Add/i).first().click();
+  await page.getByRole('button', { name: 'Share & Review' }).click();
+  await page.getByRole('button', { name: 'Create Secure Review Link' }).click();
+
+  const linkText = await page.getByTestId('review-link-url').textContent();
+  expect(linkText).toBeTruthy();
+  const publicUrl = linkText!.trim();
+  const reviewStorage = await page.evaluate(() => ({
+    links: window.localStorage.getItem('zaw_review_links_v1'),
+    versions: window.localStorage.getItem('zaw_review_versions_v1'),
+  }));
+
+  // 2. Open completely separate anonymous browser context (incognito / second device emulation)
+  const anonymousContext = await browser.newContext();
+  const anonPage = await anonymousContext.newPage();
+
+  // Seed only the published review snapshot package (simulating server state) with zero auth session / cookies
+  await anonPage.goto('/?demo=1');
+  await anonPage.evaluate((data) => {
+    window.localStorage.clear();
+    if (data.links) window.localStorage.setItem('zaw_review_links_v1', data.links);
+    if (data.versions) window.localStorage.setItem('zaw_review_versions_v1', data.versions);
+  }, reviewStorage);
+
+  // 3. Open review URL directly in anonymous page
+  await anonPage.goto(publicUrl);
+
+  // 4. Verify no database error strings are visible anywhere
+  await expect(anonPage.getByText(/function digest/i)).not.toBeVisible();
+  await expect(anonPage.getByText(/relation .* does not exist/i)).not.toBeVisible();
+  await expect(anonPage.getByText(/PGRST/i)).not.toBeVisible();
+
+  // 5. Verify review portal header & content render cleanly
+  await expect(anonPage.getByText('Review Package · Version 1')).toBeVisible();
+  await expect(anonPage.getByText('Investment Presentation Deck')).toBeVisible();
+  await expect(anonPage.getByText('Marketing Graphics & Flyer Materials')).toBeVisible();
+
+  // 6. Enter reviewer name and select preferred variant
+  const anonNameInput = anonPage.getByPlaceholder('Your name (e.g. John)');
+  await anonNameInput.fill('External Client Reviewer');
+
+  const markPreferredBtn = anonPage.getByRole('button', { name: /Mark Preferred|Preferred/i }).first();
+  if (await markPreferredBtn.isVisible()) {
+    await markPreferredBtn.click();
+  }
+
+  // 7. Submit overall approval in anonymous context
+  const approveBtn = anonPage.getByRole('button', { name: 'Approve Selected Materials' }).first();
+  await approveBtn.click();
+
+  await expect(anonPage.getByText('Review Successfully Submitted')).toBeVisible();
+
+  // 8. Reload anonymous page and verify state persists
+  await anonPage.reload();
+  await expect(anonPage.getByText('Review Package · Version 1')).toBeVisible();
+  await expect(anonPage.getByText('Investment Presentation Deck')).toBeVisible();
+
+  await anonymousContext.close();
+});
+
+

@@ -39,7 +39,14 @@ export const ReviewAccessGate: React.FC<ReviewAccessGateProps> = ({
   };
 
   const getDescription = () => {
-    if (errorMessage) return errorMessage;
+    if (errorMessage) {
+      // Guard against any raw database or SQL leak
+      const isRawDbError = /digest\(|relation.*does not exist|permission denied|PGRST|PostgreSQL|syntax error|undefined table|column.*does not exist/i.test(errorMessage);
+      if (isRawDbError) {
+        return 'This review link could not be opened right now. Please ask the sender for a new link or try again shortly.';
+      }
+      return errorMessage;
+    }
     switch (status) {
       case 'expired':
         return 'This campaign review link has reached its expiration date. Please request a fresh review link from your campaign sponsor.';

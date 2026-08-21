@@ -378,6 +378,23 @@ export class CampaignReviewService {
 
   // ---------------- Public Review Portal Methods ----------------
 
+  public static readonly SAFE_GENERIC_ERROR = 'This review link could not be opened right now. Please ask the sender for a new link or try again shortly.';
+
+  public static sanitizeErrorMessage(rawError?: string | null, fallback = CampaignReviewService.SAFE_GENERIC_ERROR): string {
+    if (!rawError || typeof rawError !== 'string') return fallback;
+    const trimmed = rawError.trim();
+    if (!trimmed) return fallback;
+
+    // Detect raw database/PostgreSQL/PostgREST error signatures
+    const isRawDbError = /digest\(|relation.*does not exist|permission denied|PGRST|PostgreSQL|syntax error|undefined table|column.*does not exist|violates.*constraint|null value in column|schema.*does not exist/i.test(trimmed);
+
+    if (isRawDbError) {
+      return fallback;
+    }
+
+    return trimmed;
+  }
+
   public static async getPublicSnapshot(
     rawToken: string
   ): Promise<PublicReviewPortalResponse> {
@@ -392,6 +409,7 @@ export class CampaignReviewService {
     }
 
     // 1. Try Edge Function for authenticated server-side asset hydration
+    let edgeFunctionFailedWith404OrNotDeployed = false;
     try {
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-public-review', {
         body: { rawToken: rawToken.trim() },
@@ -400,7 +418,7 @@ export class CampaignReviewService {
       if (!edgeError && edgeData) {
         const res = edgeData as any;
         if (res.status !== 'active') {
-          return { status: res.status, error: res.error };
+          return { status: res.status, error: CampaignReviewService.sanitizeErrorMessage(res.error) };
         }
 
         return {
@@ -422,41 +440,77 @@ export class CampaignReviewService {
           })),
         };
       }
-    } catch {
-      // Fall through to public RPC lookup
+
+      if (edgeError) {
+        console.error('[PublicReview] Edge function error:', edgeError);
+        // Only consider falling back to RPC if the Edge Function itself is not deployed / not found (HTTP 404 or FunctionsFetchError)
+        const errMsg = String(edgeError.message || '');
+        const errStatus = (edgeError as any).status || (edgeError as any).context?.status;
+        if (errMsg.includes('FunctionsFetchError') || errMsg.includes('404') || errStatus === 404 || errMsg.includes('Failed to send a request to the Edge Function')) {
+          edgeFunctionFailedWith404OrNotDeployed = true;
+        } else {
+          // Edge function is deployed but encountered an issue; do not leak internals
+          return {
+            status: 'not_found',
+            error: CampaignReviewService.SAFE_GENERIC_ERROR,
+          };
+        }
+      }
+    } catch (err) {
+      console.error('[PublicReview] Edge function invocation exception:', err);
+      edgeFunctionFailedWith404OrNotDeployed = true;
     }
 
-    // 2. Direct Public RPC fallback
-    const { data, error } = await supabase.rpc('get_public_review_snapshot', {
-      p_raw_token: rawToken.trim(),
-    });
+    // 2. Direct Public RPC compatibility fallback (only when edge function is unavailable/not deployed)
+    if (edgeFunctionFailedWith404OrNotDeployed) {
+      try {
+        const { data, error } = await supabase.rpc('get_public_review_snapshot', {
+          p_raw_token: rawToken.trim(),
+        });
 
-    if (error || !data) {
-      return { status: 'not_found', error: error?.message || 'Failed to connect to review service.' };
-    }
+        if (error || !data) {
+          console.error('[PublicReview] RPC fallback error:', error);
+          return {
+            status: 'not_found',
+            error: CampaignReviewService.SAFE_GENERIC_ERROR,
+          };
+        }
 
-    const res = data as any;
-    if (res.status !== 'active') {
-      return { status: res.status, error: res.error };
+        const res = data as any;
+        if (res.status !== 'active') {
+          return { status: res.status, error: CampaignReviewService.sanitizeErrorMessage(res.error) };
+        }
+
+        return {
+          status: 'active',
+          versionNumber: res.version_number,
+          versionTitle: res.version_title,
+          publishedAt: res.published_at,
+          snapshot: res.snapshot,
+          permissions: res.permissions,
+          feedback: (res.feedback || []).map((f: any) => ({
+            id: f.id,
+            reviewLinkId: '',
+            materialKey: f.material_key,
+            variantKey: f.variant_key,
+            reviewerName: f.reviewer_name || 'Reviewer',
+            status: f.status,
+            comment: f.comment,
+            updatedAt: f.updated_at,
+          })),
+        };
+      } catch (err) {
+        console.error('[PublicReview] RPC exception:', err);
+        return {
+          status: 'not_found',
+          error: CampaignReviewService.SAFE_GENERIC_ERROR,
+        };
+      }
     }
 
     return {
-      status: 'active',
-      versionNumber: res.version_number,
-      versionTitle: res.version_title,
-      publishedAt: res.published_at,
-      snapshot: res.snapshot,
-      permissions: res.permissions,
-      feedback: (res.feedback || []).map((f: any) => ({
-        id: f.id,
-        reviewLinkId: '',
-        materialKey: f.material_key,
-        variantKey: f.variant_key,
-        reviewerName: f.reviewer_name || 'Reviewer',
-        status: f.status,
-        comment: f.comment,
-        updatedAt: f.updated_at,
-      })),
+      status: 'not_found',
+      error: CampaignReviewService.SAFE_GENERIC_ERROR,
     };
   }
 
@@ -489,36 +543,48 @@ export class CampaignReviewService {
       return CampaignReviewStore.submitFeedback(rawToken, materialKey, sanitizedVariantKey, status, comment, sanitizedReviewerName);
     }
 
-    const { data, error } = await supabase.rpc('submit_public_review_feedback', {
-      p_raw_token: rawToken.trim(),
-      p_material_key: materialKey,
-      p_variant_key: sanitizedVariantKey || (null as any),
-      p_status: status,
-      p_comment: comment || (null as any),
-      p_reviewer_name: sanitizedReviewerName,
-    });
+    try {
+      const { data, error } = await supabase.rpc('submit_public_review_feedback', {
+        p_raw_token: rawToken.trim(),
+        p_material_key: materialKey,
+        p_variant_key: sanitizedVariantKey || (null as any),
+        p_status: status,
+        p_comment: comment || (null as any),
+        p_reviewer_name: sanitizedReviewerName,
+      });
 
-    if (error || !data) {
-      return { success: false, error: error?.message || 'Feedback submission failed.' };
+      if (error || !data) {
+        console.error('[PublicReview] Submit feedback error:', error);
+        return {
+          success: false,
+          error: CampaignReviewService.sanitizeErrorMessage(error?.message, 'Feedback submission could not be processed. Please try again shortly.'),
+        };
+      }
+
+      const res = data as any;
+      return {
+        success: Boolean(res.success),
+        error: res.error ? CampaignReviewService.sanitizeErrorMessage(res.error, 'Feedback submission could not be processed.') : undefined,
+        feedback: res.feedback
+          ? {
+              id: res.feedback.id,
+              reviewLinkId: '',
+              materialKey: res.feedback.material_key,
+              variantKey: res.feedback.variant_key,
+              reviewerName: res.feedback.reviewer_name || 'Reviewer',
+              status: res.feedback.status,
+              comment: res.feedback.comment,
+              updatedAt: res.feedback.updated_at,
+            }
+          : undefined,
+      };
+    } catch (err) {
+      console.error('[PublicReview] Submit feedback exception:', err);
+      return {
+        success: false,
+        error: 'Feedback submission could not be processed. Please try again shortly.',
+      };
     }
-
-    const res = data as any;
-    return {
-      success: Boolean(res.success),
-      error: res.error,
-      feedback: res.feedback
-        ? {
-            id: res.feedback.id,
-            reviewLinkId: '',
-            materialKey: res.feedback.material_key,
-            variantKey: res.feedback.variant_key,
-            reviewerName: res.feedback.reviewer_name || 'Reviewer',
-            status: res.feedback.status,
-            comment: res.feedback.comment,
-            updatedAt: res.feedback.updated_at,
-          }
-        : undefined,
-    };
   }
 
   public static async submitPublicCampaignApproval(
@@ -539,22 +605,34 @@ export class CampaignReviewService {
       return CampaignReviewStore.submitCampaignApproval(rawToken, status, notes, sanitizedReviewerName);
     }
 
-    const { data, error } = await supabase.rpc('submit_public_campaign_approval', {
-      p_raw_token: rawToken.trim(),
-      p_status: status,
-      p_notes: notes || (null as any),
-      p_reviewer_name: sanitizedReviewerName,
-    });
+    try {
+      const { data, error } = await supabase.rpc('submit_public_campaign_approval', {
+        p_raw_token: rawToken.trim(),
+        p_status: status,
+        p_notes: notes || (null as any),
+        p_reviewer_name: sanitizedReviewerName,
+      });
 
-    if (error || !data) {
-      return { success: false, error: error?.message || 'Campaign approval submission failed.' };
+      if (error || !data) {
+        console.error('[PublicReview] Campaign approval error:', error);
+        return {
+          success: false,
+          error: CampaignReviewService.sanitizeErrorMessage(error?.message, 'Campaign approval could not be processed. Please try again shortly.'),
+        };
+      }
+
+      const res = data as any;
+      return {
+        success: Boolean(res.success),
+        status: res.status,
+        error: res.error ? CampaignReviewService.sanitizeErrorMessage(res.error, 'Campaign approval could not be processed.') : undefined,
+      };
+    } catch (err) {
+      console.error('[PublicReview] Campaign approval exception:', err);
+      return {
+        success: false,
+        error: 'Campaign approval could not be processed. Please try again shortly.',
+      };
     }
-
-    const res = data as any;
-    return {
-      success: Boolean(res.success),
-      status: res.status,
-      error: res.error,
-    };
   }
 }

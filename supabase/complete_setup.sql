@@ -12,7 +12,13 @@ BEGIN;
 -- 1. EXTENSIONS
 -- ------------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA public;
+CREATE SCHEMA IF NOT EXISTS extensions;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
+    CREATE EXTENSION pgcrypto WITH SCHEMA extensions;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------------------------
 -- 2. TABLES & CORE ENTITIES
@@ -1276,7 +1282,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_token_hash TEXT;
@@ -1288,7 +1294,7 @@ BEGIN
     RETURN jsonb_build_object('status', 'not_found', 'error', 'Invalid review token.');
   END IF;
 
-  v_token_hash := encode(digest(TRIM(p_raw_token), 'sha256'), 'hex');
+  v_token_hash := encode(extensions.digest(TRIM(p_raw_token)::text, 'sha256'::text), 'hex');
 
   SELECT * INTO v_link
   FROM public.campaign_review_links
@@ -1359,7 +1365,7 @@ CREATE OR REPLACE FUNCTION public.submit_public_review_feedback(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_token_hash TEXT;
@@ -1380,7 +1386,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Invalid review token.');
   END IF;
 
-  v_token_hash := encode(digest(TRIM(p_raw_token), 'sha256'), 'hex');
+  v_token_hash := encode(extensions.digest(TRIM(p_raw_token)::text, 'sha256'::text), 'hex');
 
   SELECT * INTO v_link
   FROM public.campaign_review_links
@@ -1566,7 +1572,7 @@ CREATE OR REPLACE FUNCTION public.submit_public_campaign_approval(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_token_hash TEXT;
@@ -1582,7 +1588,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Invalid review token.');
   END IF;
 
-  v_token_hash := encode(digest(TRIM(p_raw_token), 'sha256'), 'hex');
+  v_token_hash := encode(extensions.digest(TRIM(p_raw_token)::text, 'sha256'::text), 'hex');
 
   SELECT * INTO v_link
   FROM public.campaign_review_links

@@ -110,7 +110,33 @@ test('forward migration 20260821130000 idempotently drops legacy review RPC over
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.get_public_review_snapshot\(TEXT\) TO anon, authenticated, service_role;/);
 });
 
-test('full PostgreSQL migration replay from zero creates hardened RPCs and eliminates legacy overloads', async () => {
+test('config.toml configures get-public-review with verify_jwt = false for anonymous access', async () => {
+  const config = await read('config.toml');
+  assert.match(config, /\[functions\.get-public-review\]/);
+  assert.match(config, /\[functions\.get-public-review\]\s*\n\s*verify_jwt\s*=\s*false/);
+});
+
+test('hotfix migration 20260821150000 schema-qualifies extensions.digest and hardens search path', async () => {
+  const sql = await read('migrations/20260821150000_fix_public_review_pgcrypto.sql');
+  // 1. Schema setup & extension placement
+  assert.match(sql, /CREATE SCHEMA IF NOT EXISTS extensions;/);
+  assert.match(sql, /CREATE EXTENSION pgcrypto WITH SCHEMA extensions;/);
+
+  // 2. Search path hardening to public, extensions, pg_temp
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.get_public_review_snapshot[\s\S]*SET search_path = public, extensions, pg_temp/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.submit_public_review_feedback[\s\S]*SET search_path = public, extensions, pg_temp/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.submit_public_campaign_approval[\s\S]*SET search_path = public, extensions, pg_temp/);
+
+  // 3. Schema-qualified pgcrypto digest call
+  assert.match(sql, /extensions\.digest\(TRIM\(p_raw_token\)::text,\s*'sha256'::text\)/);
+
+  // 4. Role grants
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.get_public_review_snapshot\(TEXT\) TO anon, authenticated, service_role;/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.submit_public_review_feedback\(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT\) TO anon, authenticated, service_role;/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.submit_public_campaign_approval\(TEXT, TEXT, TEXT, TEXT\) TO anon, authenticated, service_role;/);
+});
+
+test('full PostgreSQL migration replay from zero creates hardened RPCs and verifies token hashing execution', async () => {
   const db = new PGlite({
     extensions: { pgcrypto, uuid_ossp }
   });
@@ -188,7 +214,7 @@ test('full PostgreSQL migration replay from zero creates hardened RPCs and elimi
   const migrationsDir = join(root, 'migrations');
   const files = (await readdir(migrationsDir)).filter(f => f.endsWith('.sql')).sort();
 
-  assert.ok(files.length >= 8, 'Expected at least 8 migrations');
+  assert.ok(files.length >= 10, 'Expected at least 10 migrations');
 
   for (const file of files) {
     const migrationSql = await readFile(join(migrationsDir, file), 'utf8');
@@ -236,6 +262,119 @@ test('full PostgreSQL migration replay from zero creates hardened RPCs and elimi
   assert.equal(createLinkProcs.length, 1);
   const publishVersionProcs = procs.filter(p => p.proname === 'publish_campaign_review_version_atomic');
   assert.equal(publishVersionProcs.length, 1);
+
+  // 5. Functional SQL Verification: Test actual RPC hashing execution with sample data
+  const rawToken = 'rev_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  // Compute expected SHA-256 hash using crypto
+  const { createHash } = await import('node:crypto');
+  const expectedHash = createHash('sha256').update(rawToken).digest('hex');
+
+  // Create sample user, org and campaign
+  const userId = 'a0000000-0000-0000-0000-000000000001';
+  await db.query(`
+    INSERT INTO auth.users (id, email)
+    VALUES ($1::uuid, 'sarah@acmecap.com');
+  `, [userId]);
+
+  const orgResult = await db.query(`
+    INSERT INTO public.organizations (name, slug)
+    VALUES ('Acme Capital', 'acme-cap')
+    RETURNING id;
+  `);
+  const orgId = orgResult.rows[0].id;
+
+  await db.query(`
+    INSERT INTO public.organization_members (organization_id, user_id, role)
+    VALUES ($1::uuid, $2::uuid, 'owner');
+  `, [orgId, userId]);
+
+  // Set auth context
+  await db.exec(`
+    SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+    SET request.jwt.claim.role = 'authenticated';
+  `);
+
+  const campaignResult = await db.query(`
+    INSERT INTO public.campaigns (organization_id, name, status, source_data)
+    VALUES ($1, 'Phoenix Multifamily', 'completed', '{"title":"Phoenix Multifamily"}'::jsonb)
+    RETURNING id;
+  `, [orgId]);
+  const campaignId = campaignResult.rows[0].id;
+
+  // Atomically create review link with snapshot
+  const sampleSnapshot = {
+    campaignId,
+    campaignTitle: 'Phoenix Multifamily',
+    campaignType: 'value_add',
+    targetMarket: 'Phoenix, AZ',
+    graphicMaterials: [
+      {
+        id: 'graphic_square',
+        label: 'Square Post',
+        format: 'square',
+        dimensions: { width: 1080, height: 1080 },
+        variants: [{ id: 'editorial', name: 'Editorial Style', config: {} }]
+      }
+    ],
+    copyChannels: [
+      { id: 'copy_facebook', channelName: 'Facebook', headline: 'Great Deal', body: 'Invest now', cta: 'Learn More' }
+    ]
+  };
+
+  await db.query(`
+    SELECT public.create_campaign_review_link_atomic(
+      $1::uuid,
+      $2::uuid,
+      $3::text,
+      $4::jsonb,
+      '{"allowComments":true,"allowSelection":true,"allowApproval":true}'::jsonb
+    );
+  `, [orgId, campaignId, expectedHash, JSON.stringify(sampleSnapshot)]);
+
+  // Test 5A: get_public_review_snapshot with raw token
+  const snapshotRes = await db.query(`
+    SELECT public.get_public_review_snapshot($1::text) AS result;
+  `, [rawToken]);
+  const snapshotData = snapshotRes.rows[0].result;
+  assert.equal(snapshotData.status, 'active');
+  assert.equal(snapshotData.version_number, 1);
+  assert.equal(snapshotData.snapshot.campaignTitle, 'Phoenix Multifamily');
+
+  // Test 5B: get_public_review_snapshot with invalid raw token
+  const invalidRes = await db.query(`
+    SELECT public.get_public_review_snapshot('rev_non_existent_token_12345') AS result;
+  `);
+  assert.equal(invalidRes.rows[0].result.status, 'not_found');
+
+  // Test 5C: submit_public_review_feedback with valid raw token
+  const feedbackRes = await db.query(`
+    SELECT public.submit_public_review_feedback(
+      $1::text,
+      'graphic_square'::text,
+      'editorial'::text,
+      'preferred'::text,
+      'Looks great for social.'::text,
+      'Sarah Reviewer'::text
+    ) AS result;
+  `, [rawToken]);
+  const feedbackData = feedbackRes.rows[0].result;
+  assert.equal(feedbackData.success, true);
+  assert.equal(feedbackData.feedback.reviewer_name, 'Sarah Reviewer');
+  assert.equal(feedbackData.feedback.status, 'preferred');
+
+  // Test 5D: submit_public_campaign_approval with valid raw token
+  const approvalRes = await db.query(`
+    SELECT public.submit_public_campaign_approval(
+      $1::text,
+      'approved'::text,
+      'Executive sign-off confirmed.'::text,
+      'General Partner'::text
+    ) AS result;
+  `, [rawToken]);
+  const approvalData = approvalRes.rows[0].result;
+  assert.equal(approvalData.success, true);
+  assert.equal(approvalData.status, 'approved');
 });
+
 
 
