@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-editorial: 'Instrument Serif', 'Playfair Display', Georgia, serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scrollbar-gutter: stable;
+  }
+}
+
+/* Custom utility classes for editorial layouts */
+.font-editorial-title {
+  font-family: var(--font-editorial);
+  letter-spacing: -0.02em;
+}
+
+.font-serif-title {
+  font-family: var(--font-serif);
+  letter-spacing: -0.015em;
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Canvas container styling */
+.canvas-aspect-square { aspect-ratio: 1 / 1; }
+.canvas-aspect-portrait { aspect-ratio: 4 / 5; }
+.canvas-aspect-story { aspect-ratio: 9 / 16; }
+.canvas-aspect-landscape { aspect-ratio: 1.91 / 1; }
+.canvas-aspect-flyer-letter { aspect-ratio: 8.5 / 11; }
+.canvas-aspect-flyer-a4 { aspect-ratio: 210 / 297; }
+
+/* Print styling */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Zaw Marketing Studio",
+  "description": "Real estate marketing and business automation platform for campaign generation, presentations, and brand kit management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
