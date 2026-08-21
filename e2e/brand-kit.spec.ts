@@ -4,7 +4,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/?demo=1');
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
-  await page.getByRole('button', { name: /Brand Kit/i }).click();
+  await page.getByRole('button', { name: 'Brand Kit', exact: true }).click();
   await expect(page.getByText('Brand Color Palette')).toBeVisible();
 });
 
@@ -85,7 +85,7 @@ test('responsive layout has no horizontal overflow across 390px, 1440px, and 192
   for (const vp of viewports) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto('/?demo=1');
-    await page.getByRole('button', { name: /Brand Kit/i }).click();
+    await page.getByRole('button', { name: 'Brand Kit', exact: true }).click();
     await expect(page.getByText('Brand Color Palette')).toBeVisible();
 
     const metrics = await page.evaluate(() => ({
@@ -99,7 +99,7 @@ test('responsive layout has no horizontal overflow across 390px, 1440px, and 192
 test('brand color palette matches desktop visual baseline', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?demo=1');
-  await page.getByRole('button', { name: /Brand Kit/i }).click();
+  await page.getByRole('button', { name: 'Brand Kit', exact: true }).click();
   const palette = page.locator('div:has(> div > h3:has-text("Brand Color Palette"))').first();
   await expect(palette).toBeVisible();
   await expect(palette).toHaveScreenshot('brand-color-palette-desktop.png', {
