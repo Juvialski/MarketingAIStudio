@@ -19,6 +19,7 @@ export interface PresentationRendererProps {
   style?: React.CSSProperties;
   onNotesChange?: (slideIndex: number, notes: string) => void;
   readOnly?: boolean;
+  runtimeMode?: 'demo' | 'live';
 }
 
 export const PresentationRenderer = forwardRef<PresentationRendererRef, PresentationRendererProps>(
@@ -31,14 +32,16 @@ export const PresentationRenderer = forwardRef<PresentationRendererRef, Presenta
       style = {},
       onNotesChange,
       readOnly = false,
+      runtimeMode,
     },
     ref
   ) {
-    const isDemo =
-      deck.isDemo ??
-      (campaign?.tags?.includes('Demo') ||
-        campaign?.id.includes('demo') ||
-        campaign?.id.includes('sample'));
+    const isDemo = runtimeMode
+      ? runtimeMode === 'demo'
+      : deck.isDemo ??
+        (campaign?.tags?.includes('Demo') ||
+          campaign?.id.includes('demo') ||
+          campaign?.id.includes('sample'));
 
     // Published demo review snapshots can outlive a deployment. Normalize only
     // bundled `/demo/*` references at render time so old snapshots also pick up

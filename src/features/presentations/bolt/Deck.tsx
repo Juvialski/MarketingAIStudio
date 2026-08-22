@@ -263,11 +263,12 @@ const Deck = forwardRef<DeckRef, DeckProps>(function Deck(
 
   const openPresenter = useCallback(() => {
     if (isPresenter || typeof window === 'undefined') return;
-    const url =
-      window.location.pathname +
-      '?presenter=1&campaign=' +
-      encodeURIComponent(campaignId) +
-      window.location.hash;
+    const url = new URL(window.location.href);
+    const isExplicitDemo = url.searchParams.get('demo') === '1';
+    url.search = '';
+    if (isExplicitDemo) url.searchParams.set('demo', '1');
+    url.searchParams.set('presenter', '1');
+    url.searchParams.set('campaign', campaignId);
     window.open(url, `zaw-presenter-${campaignId}`);
   }, [isPresenter, campaignId]);
 

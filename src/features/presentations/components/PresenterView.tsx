@@ -19,8 +19,8 @@ export const PresenterView: React.FC<PresenterViewProps> = ({
   onUpdateCampaign,
 }) => {
   const isDemoCampaign = useMemo(
-    () => runtimeMode === 'demo' || campaign.tags?.includes('Demo') || campaign.tags?.includes('Fictional'),
-    [campaign.tags, runtimeMode]
+    () => runtimeMode === 'demo',
+    [runtimeMode]
   );
   const deck = campaign.presentation || (isDemoCampaign ? generateDeterministicPresentationDeck(campaign, brandKit) : null);
 
@@ -50,6 +50,7 @@ export const PresenterView: React.FC<PresenterViewProps> = ({
         deck={deck}
         campaign={campaign}
         brandKit={brandKit}
+        runtimeMode={runtimeMode}
         onNotesChange={(slideIndex, notes) => {
           const updatedSlides = [...deck.slides];
           if (!updatedSlides[slideIndex]) return;

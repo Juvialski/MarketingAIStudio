@@ -49,9 +49,8 @@ Important current boundaries:
   campaigns or fixture image results.
 - A no-backend local install is presented as the labeled demo workspace. A
   `?demo=1` query explicitly selects demo mode even when Supabase is configured.
-- The standalone presenter route permits only the two known bundled demo
-  campaign IDs as a demo fixture route; arbitrary live presenter IDs cannot
-  resolve local samples.
+- Bundled fixture presenter campaigns require the explicit `demo=1` query;
+  arbitrary live presenter IDs cannot resolve local samples.
 
 ## Campaign persistence
 
@@ -85,8 +84,10 @@ invalid `drafts` value is never inserted into `campaign_assets`.
 `campaign_assets` metadata includes the expanded source/provenance vocabulary
 from the production hardening migration. Generated images are persisted by
 `generate-image` before the UI attaches the canonical reference to campaign
-source data. A failed save is visible to the user, but abandoned draft objects
-still need a future cleanup/reconciliation job.
+source data. A failed save is visible to the user. Explicit cancellation of a
+new live intake removes only objects under that unsaved organization's
+`org/drafts/` prefix; browser termination and abandoned tabs still need future
+reconciliation.
 
 Private buckets and organization-prefixed Storage policies are established by
 the forward migration chain beginning with
@@ -102,8 +103,9 @@ the forward migration chain beginning with
 - Image attempts have a stable UI idempotency key; the server usage claim has
   an organization/key uniqueness boundary.
 - `ImageGenerationModal` exposes preparing/submitting/generating/persisting/
-  attaching/completed and failure categories. A persistence error is not
-  presented as a generic provider success/failure ambiguity.
+  generation-completed/asset-persisted/attaching/attached-locally and failure
+  categories. The modal's local attachment state is not presented as campaign
+  row persistence.
 - `extract-property-data`, strategy, copy, presentation, and critique routes
   use runtime schemas. Paste Everything now validates the extracted payload at
   the Edge boundary before returning it to the browser.
@@ -147,8 +149,8 @@ Measured production builds with CI-like environment values:
 
 | Metric | Before | After |
 | --- | ---: | ---: |
-| Initial JS chunk | 1,698.34 kB | 1,037.22 kB |
-| Initial JS gzip | 477.27 kB | 319.36 kB |
+| Initial JS chunk | 1,698.34 kB | 1,037.82 kB |
+| Initial JS gzip | 477.27 kB | 319.51 kB |
 
 Presentation, public review, campaign intake, settings, Brand Kit, lead
 finder, and campaign workspace/export dependencies are lazy-loaded. Export
@@ -159,11 +161,11 @@ libraries remain deferred with the workspace/export chunks.
 Verified locally in this run:
 
 - `npm run typecheck` — pass.
-- `npm test` — 44 test files, 229 tests pass.
-- `npm run test:security` — 14 tests pass, including full migration replay.
-- `npm run test:e2e` — 35 tests pass across desktop/mobile demo, review,
+- `npm test` — 45 test files, 231 tests pass.
+- `npm run test:security` — 15 tests pass, including full migration replay.
+- `npm run test:e2e` — 36 tests pass across desktop/mobile demo, review,
   presentation, design, export, Brand Kit, and lightbox contracts.
-- Focused Playwright also passes: presentation 6/6, design 2/2, export 2/2,
+- Focused Playwright also passes: presentation 7/7, design 2/2, export 2/2,
   lightbox 4/4.
 - `npm run build` — pass with the bundle measurements above.
 
@@ -185,8 +187,9 @@ applied migration or change the existing token/function signature.
   multi-device editing.
 - Pending AI usage claims can remain reserved if the Edge runtime dies before
   `finish_ai_generation`; add a stale-claim lease/reconciliation policy.
-- Draft uploads abandoned before campaign creation can leave orphaned Storage
-  objects; add a cleanup job keyed by the `drafts` prefix and age.
+- Draft uploads abandoned by browser termination can leave orphaned Storage
+  objects; explicit cancellation is handled, but a cleanup job keyed by the
+  `drafts` prefix and age remains advisable.
 - Review-link mutation currently follows the existing organization-member
   authorization model; tighten it to owner/admin if product policy requires
   that restriction.

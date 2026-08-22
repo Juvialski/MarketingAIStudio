@@ -37,7 +37,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
   runtimeMode,
   onUpdateCampaign,
 }) => {
-  const isDemo = runtimeMode === 'demo' || campaign.tags?.includes('Demo') || campaign.tags?.includes('Fictional');
+  const isDemo = runtimeMode === 'demo';
 
   const [deck, setDeck] = useState<PresentationDeck | null>(() => {
     if (campaign.presentation) return campaign.presentation;
@@ -303,6 +303,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
           deck={deck}
           campaign={campaign}
           brandKit={brandKit}
+          runtimeMode={runtimeMode}
           onNotesChange={handleNotesChange}
         />
       </div>

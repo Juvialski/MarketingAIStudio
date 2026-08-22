@@ -6,6 +6,7 @@ import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
+import { resolvePrivateAssetUrl } from '../functions/_shared/reviewAssetUrl.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(join(root, relative), 'utf8');
@@ -147,8 +148,23 @@ test('public review signing is restricted to assets owned by the published campa
 test('forward approval migration enforces the review comments permission for approval notes', async () => {
   const sql = await read('migrations/20260822090000_review_approval_comment_permission.sql');
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.submit_public_campaign_approval/);
+  assert.match(sql, /SECURITY DEFINER/);
+  assert.match(sql, /SET search_path = public, extensions, pg_temp/);
   assert.match(sql, /IF v_sanitized_notes <> '' AND NOT v_link\.allow_comments/);
   assert.match(sql, /Comments are disabled for this review link/);
+});
+
+test('public review Edge hydration clears stale private URLs when signing fails', async () => {
+  const source = await read('functions/get-public-review/index.ts');
+  assert.match(source, /resolvePrivateAssetUrl\(snapshot\.heroImageUrl, signed\)/);
+  assert.match(source, /resolvePrivateAssetUrl\(snapshot\.brandKit\.logoUrl, signed\)/);
+  assert.match(source, /resolvePrivateAssetUrl\(snapshot\.brandKit\.logoDarkUrl, signed\)/);
+  assert.match(source, /resolvePrivateAssetUrl\(slide\.imageUrl, signed\)/);
+  assert.match(source, /resolvePrivateAssetUrl\(item\.imageUrl, signed\)/);
+  assert.doesNotMatch(source, /if \(signed\) snapshot\.heroImageUrl = signed/);
+  assert.equal(resolvePrivateAssetUrl('https://old.example/signed-url', ''), '');
+  assert.equal(resolvePrivateAssetUrl('https://old.example/signed-url', undefined), '');
+  assert.equal(resolvePrivateAssetUrl('https://old.example/signed-url', 'https://fresh.example/signed-url'), 'https://fresh.example/signed-url');
 });
 
 test('full PostgreSQL migration replay from zero creates hardened RPCs and verifies token hashing execution', async () => {
@@ -389,6 +405,74 @@ test('full PostgreSQL migration replay from zero creates hardened RPCs and verif
   const approvalData = approvalRes.rows[0].result;
   assert.equal(approvalData.success, true);
   assert.equal(approvalData.status, 'approved');
+
+  // Test 5E: approval notes respect allow_comments while approval remains enabled.
+  const rawTokenWithoutComments = 'rev_abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+  const noCommentsHash = createHash('sha256').update(rawTokenWithoutComments).digest('hex');
+  await db.query(`
+    SELECT public.create_campaign_review_link_atomic(
+      $1::uuid,
+      $2::uuid,
+      $3::text,
+      $4::jsonb,
+      '{"allowComments":false,"allowSelection":true,"allowApproval":true}'::jsonb
+    );
+  `, [orgId, campaignId, noCommentsHash, JSON.stringify(sampleSnapshot)]);
+
+  const blockedApprovalRes = await db.query(`
+    SELECT public.submit_public_campaign_approval(
+      $1::text,
+      'approved'::text,
+      'This note must be rejected.'::text,
+      'General Partner'::text
+    ) AS result;
+  `, [rawTokenWithoutComments]);
+  assert.equal(blockedApprovalRes.rows[0].result.success, false);
+  assert.equal(blockedApprovalRes.rows[0].result.error, 'Comments are disabled for this review link.');
+
+  const emptyNotesRes = await db.query(`
+    SELECT public.submit_public_campaign_approval(
+      $1::text,
+      'needs_changes'::text,
+      ''::text,
+      'General Partner'::text
+    ) AS result;
+  `, [rawTokenWithoutComments]);
+  assert.equal(emptyNotesRes.rows[0].result.success, true);
+  assert.equal(emptyNotesRes.rows[0].result.status, 'needs_changes');
+
+  // Test 5F: expired links remain unavailable even when approval is enabled.
+  const rawExpiredToken = 'rev_1234123412341234123412341234123412341234123412341234123412341234';
+  const expiredHash = createHash('sha256').update(rawExpiredToken).digest('hex');
+  await db.query(`
+    SELECT public.create_campaign_review_link_atomic(
+      $1::uuid,
+      $2::uuid,
+      $3::text,
+      $4::jsonb,
+      '{"allowComments":true,"allowSelection":true,"allowApproval":true}'::jsonb,
+      timezone('utc'::text, now()) - interval '1 minute'
+    );
+  `, [orgId, campaignId, expiredHash, JSON.stringify(sampleSnapshot)]);
+  const expiredApprovalRes = await db.query(`
+    SELECT public.submit_public_campaign_approval(
+      $1::text,
+      'approved'::text,
+      NULL::text,
+      'General Partner'::text
+    ) AS result;
+  `, [rawExpiredToken]);
+  assert.equal(expiredApprovalRes.rows[0].result.success, false);
+  assert.equal(expiredApprovalRes.rows[0].result.error, 'This review link is not active or has expired.');
+
+  const privilegeRes = await db.query(`
+    SELECT has_function_privilege(
+      'anon'::name,
+      'public.submit_public_campaign_approval(text,text,text,text)'::text,
+      'EXECUTE'
+    ) AS can_execute;
+  `);
+  assert.equal(privilegeRes.rows[0].can_execute, true);
 });
 
 

@@ -62,6 +62,20 @@ const segment = (value: string, label: string): string => {
   return normalized;
 };
 
+export function getDraftUploadPaths(organizationId: string, images: CampaignImage[]): string[] {
+  const safeOrganizationId = segment(organizationId, 'organization ID');
+  const prefix = `${safeOrganizationId}/drafts/`;
+  return [...new Set(
+    images
+      .filter((image) => image.storageBucket === 'property-media' && image.storagePath?.startsWith(prefix))
+      .map((image) => image.storagePath!)
+      .filter((path) => {
+        const parts = path.split('/');
+        return parts.length >= 3 && parts[0] === safeOrganizationId && parts[1] === 'drafts' && !parts.slice(2).some((part) => part === '.' || part === '..');
+      })
+  )];
+}
+
 const extension = (filename: string, fallback: string): string => {
   const raw = filename.split('.').pop()?.toLowerCase() || fallback;
   return /^[a-z0-9]{1,8}$/.test(raw) ? raw : fallback;
@@ -141,6 +155,18 @@ export class StorageService {
 
     asset.mimeType = file.type || 'image/jpeg';
     return asset;
+  }
+
+  /** Remove only property-media objects belonging to the unsaved draft prefix. */
+  public static async deleteDraftUploads(organizationId: string, images: CampaignImage[]): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    const paths = getDraftUploadPaths(organizationId, images);
+    if (paths.length === 0) return;
+
+    const { error } = await supabase.storage.from('property-media').remove(paths);
+    if (error) {
+      throw new ServiceError('storage_failed', 'Unsaved draft photos could not be removed from private storage.', error);
+    }
   }
 
   /**

@@ -4,9 +4,11 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { AppError } from '../_shared/errors.ts';
 import { handleOptions, ensurePost, errorResponse, jsonResponse } from '../_shared/http.ts';
 import { parseBody, publicReviewRequestSchema } from '../_shared/validation.ts';
+import { resolvePrivateAssetUrl } from '../_shared/reviewAssetUrl.mjs';
 
 const VALID_BUCKETS = new Set([
   'property-media',
@@ -37,7 +39,7 @@ async function hashReviewToken(token: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function loadReviewAssetScope(admin: ReturnType<typeof createClient>, rawToken: string): Promise<ReviewAssetScope> {
+async function loadReviewAssetScope(admin: SupabaseClient, rawToken: string): Promise<ReviewAssetScope> {
   const tokenHash = await hashReviewToken(rawToken);
   const { data: link } = await admin
     .from('campaign_review_links')
@@ -129,12 +131,12 @@ serve(async (req) => {
     // 1. Hydrate hero image
     if (snapshot.heroImageRef?.storageBucket && snapshot.heroImageRef?.storagePath) {
       const signed = await signAsset(snapshot.heroImageRef.storageBucket, snapshot.heroImageRef.storagePath);
-      if (signed) snapshot.heroImageUrl = signed;
+      snapshot.heroImageUrl = resolvePrivateAssetUrl(snapshot.heroImageUrl, signed);
     } else if (snapshot.heroImageUrl) {
       const parsed = parseSupabaseUrl(snapshot.heroImageUrl);
       if (parsed) {
         const signed = await signAsset(parsed.bucket, parsed.path);
-        if (signed) snapshot.heroImageUrl = signed;
+        snapshot.heroImageUrl = resolvePrivateAssetUrl(snapshot.heroImageUrl, signed);
       }
     }
 
@@ -142,23 +144,23 @@ serve(async (req) => {
     if (snapshot.brandKit) {
       if (snapshot.brandKit.logoRef?.storageBucket && snapshot.brandKit.logoRef?.storagePath) {
         const signed = await signAsset(snapshot.brandKit.logoRef.storageBucket, snapshot.brandKit.logoRef.storagePath);
-        if (signed) snapshot.brandKit.logoUrl = signed;
+        snapshot.brandKit.logoUrl = resolvePrivateAssetUrl(snapshot.brandKit.logoUrl, signed);
       } else if (snapshot.brandKit.logoUrl) {
         const parsed = parseSupabaseUrl(snapshot.brandKit.logoUrl);
         if (parsed) {
           const signed = await signAsset(parsed.bucket, parsed.path);
-          if (signed) snapshot.brandKit.logoUrl = signed;
+          snapshot.brandKit.logoUrl = resolvePrivateAssetUrl(snapshot.brandKit.logoUrl, signed);
         }
       }
 
       if (snapshot.brandKit.logoDarkRef?.storageBucket && snapshot.brandKit.logoDarkRef?.storagePath) {
         const signed = await signAsset(snapshot.brandKit.logoDarkRef.storageBucket, snapshot.brandKit.logoDarkRef.storagePath);
-        if (signed) snapshot.brandKit.logoDarkUrl = signed;
+        snapshot.brandKit.logoDarkUrl = resolvePrivateAssetUrl(snapshot.brandKit.logoDarkUrl, signed);
       } else if (snapshot.brandKit.logoDarkUrl) {
         const parsed = parseSupabaseUrl(snapshot.brandKit.logoDarkUrl);
         if (parsed) {
           const signed = await signAsset(parsed.bucket, parsed.path);
-          if (signed) snapshot.brandKit.logoDarkUrl = signed;
+          snapshot.brandKit.logoDarkUrl = resolvePrivateAssetUrl(snapshot.brandKit.logoDarkUrl, signed);
         }
       }
     }
@@ -169,24 +171,24 @@ serve(async (req) => {
         if (slide.type === 'cover' || slide.type === 'property_overview') {
           if (slide.storageBucket && slide.storagePath) {
             const signed = await signAsset(slide.storageBucket, slide.storagePath);
-            if (signed) slide.imageUrl = signed;
+            slide.imageUrl = resolvePrivateAssetUrl(slide.imageUrl, signed);
           } else if (slide.imageUrl) {
             const parsed = parseSupabaseUrl(slide.imageUrl);
             if (parsed) {
               const signed = await signAsset(parsed.bucket, parsed.path);
-              if (signed) slide.imageUrl = signed;
+              slide.imageUrl = resolvePrivateAssetUrl(slide.imageUrl, signed);
             }
           }
         } else if (slide.type === 'gallery' && Array.isArray(slide.items)) {
           for (const item of slide.items) {
             if (item.storageBucket && item.storagePath) {
               const signed = await signAsset(item.storageBucket, item.storagePath);
-              if (signed) item.imageUrl = signed;
+              item.imageUrl = resolvePrivateAssetUrl(item.imageUrl, signed);
             } else if (item.imageUrl) {
               const parsed = parseSupabaseUrl(item.imageUrl);
               if (parsed) {
                 const signed = await signAsset(parsed.bucket, parsed.path);
-                if (signed) item.imageUrl = signed;
+                item.imageUrl = resolvePrivateAssetUrl(item.imageUrl, signed);
               }
             }
           }

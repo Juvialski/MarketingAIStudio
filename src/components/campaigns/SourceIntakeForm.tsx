@@ -73,6 +73,7 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
   );
   const [uploadedImages, setUploadedImages] = useState<CampaignImage[]>(initialData?.uploadedImages || []);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCleaningDraft, setIsCleaningDraft] = useState(false);
 
   // "Paste Everything" Extraction State
   const [rawIntakeText, setRawIntakeText] = useState('');
@@ -167,6 +168,17 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
   const removeImage = (id: string) => {
     const target = uploadedImages.find((img) => img.id === id);
     if (target?.storagePath && organizationId && campaignId) {
+      if (runtimeMode === 'live' && campaignId === 'drafts') {
+        setIsCleaningDraft(true);
+        void StorageService.deleteDraftUploads(organizationId, [target])
+          .then(() => setUploadedImages((prev) => prev.filter((img) => img.id !== id)))
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : 'The unsaved draft photo could not be deleted from storage.';
+            setFormValidationErrors((previous) => [...previous, message]);
+          })
+          .finally(() => setIsCleaningDraft(false));
+        return;
+      }
       void StorageService.deleteCampaignAsset(
         organizationId,
         campaignId,
@@ -178,6 +190,22 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
       });
     }
     setUploadedImages((prev) => prev.filter((img) => img.id !== id));
+  };
+
+  const handleCancel = async () => {
+    if (runtimeMode === 'live' && campaignId === 'drafts' && organizationId) {
+      setIsCleaningDraft(true);
+      try {
+        await StorageService.deleteDraftUploads(organizationId, uploadedImages);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unsaved draft photos could not be removed from storage.';
+        setFormValidationErrors((previous) => [...previous, message]);
+        setIsCleaningDraft(false);
+        return;
+      }
+      setIsCleaningDraft(false);
+    }
+    onCancel?.();
   };
 
   // --- "Paste Everything" Extraction & Merge Engine ---
@@ -1190,10 +1218,11 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
         {onCancel && (
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => void handleCancel()}
+            disabled={isCleaningDraft}
             className="px-5 py-2.5 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50"
           >
-            Cancel
+            {isCleaningDraft ? 'Cleaning up…' : 'Cancel'}
           </button>
         )}
         <button

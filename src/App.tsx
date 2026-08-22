@@ -378,12 +378,13 @@ export function App() {
   if (isPresenterMode && presenterCampaignId) {
     // Resolve presenter campaign
     let presenterCampaign = campaigns.find((c) => c.id === presenterCampaignId);
-    const isAllowlistedDemoPresenter = DEMO_PRESENTER_CAMPAIGN_IDS.has(presenterCampaignId);
 
-    if (!presenterCampaign && (runtimeMode === 'demo' || isAllowlistedDemoPresenter)) {
+    if (!presenterCampaign && runtimeMode === 'demo') {
       presenterCampaign =
         CampaignStore.getById(presenterCampaignId, { allowDemoFixtures: true }) ||
-        SAMPLE_CAMPAIGNS.find((c) => c.id === presenterCampaignId);
+        (DEMO_PRESENTER_CAMPAIGN_IDS.has(presenterCampaignId)
+          ? SAMPLE_CAMPAIGNS.find((c) => c.id === presenterCampaignId)
+          : undefined);
     }
 
     if (!presenterCampaign) {
@@ -425,7 +426,7 @@ export function App() {
         <PresenterView
           campaign={presenterCampaign}
           brandKit={brandKit}
-          runtimeMode={isAllowlistedDemoPresenter ? 'demo' : runtimeMode}
+          runtimeMode={runtimeMode}
           onUpdateCampaign={(updated) => void handleUpdateCampaign(updated)}
         />
       </Suspense>

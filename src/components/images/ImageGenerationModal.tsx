@@ -12,6 +12,10 @@ import { SettingsStore } from '../../services/storage/settingsStore';
 import { ImageProviderRegistry } from '../../services/providers/imageProviderRegistry';
 import { ImageSpendingTracker } from '../../services/providers/imageSpendingTracker';
 import { ImageProviderRouter } from '../../services/providers/imageProvider';
+import {
+  ImageGenerationState,
+  stateAfterProviderResult,
+} from '../../services/providers/imageGenerationLifecycle';
 import { isSupabaseConfigured } from '../../services/supabase/client';
 import { 
   Sparkles, 
@@ -51,18 +55,6 @@ interface GenerationDiagnostics {
   provenance: string;
 }
 
-type GenerationState =
-  | 'idle'
-  | 'preparing'
-  | 'submitting'
-  | 'generating'
-  | 'persisting'
-  | 'attaching'
-  | 'completed'
-  | 'provider_failed'
-  | 'storage_failed'
-  | 'campaign_update_failed';
-
 export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   isOpen,
   onClose,
@@ -93,7 +85,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   const [progressMsg, setProgressMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<GenerationDiagnostics | null>(null);
-  const [generationState, setGenerationState] = useState<GenerationState>('idle');
+  const [generationState, setGenerationState] = useState<ImageGenerationState>('idle');
   const requestKeyRef = useRef<string | null>(null);
 
   if (!isOpen) return null;
@@ -145,7 +137,12 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
 
     requestKeyRef.current = crypto.randomUUID();
     setIsGenerating(true);
-    setGenerationState('preparing');
+    let lifecycleState: ImageGenerationState = 'preparing';
+    const transition = (next: ImageGenerationState) => {
+      lifecycleState = next;
+      setGenerationState(next);
+    };
+    transition('preparing');
     setProgressMsg('Composing creative brief...');
     const startTime = Date.now();
 
@@ -180,11 +177,12 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
         idempotencyKey: requestKeyRef.current,
       });
 
-      setGenerationState('submitting');
+      transition('submitting');
       const result = await adapter.generateFromBrief(brief, (step) => {
-        setGenerationState(step.toLowerCase().includes('persist') ? 'persisting' : 'generating');
+        transition(step.toLowerCase().includes('persist') ? 'persisting' : 'generating');
         setProgressMsg(step);
       });
+      transition(stateAfterProviderResult(result));
 
       const durationMs = Date.now() - startTime;
       const isFixture = result.provider === 'demo_fixture' || result.provenance === 'fixture';
@@ -222,14 +220,20 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
         provenance: newCampaignImg.provenance || 'generated',
       });
 
-      setGenerationState('attaching');
+      transition('attaching');
       onImageGenerated(newCampaignImg);
-      setGenerationState('completed');
+      transition('attached_locally');
       onClose();
     } catch (err: any) {
       console.error('Image generation failed', err);
       const message = err?.message || 'Image generation encountered an error.';
-      setGenerationState(/persist|storage|asset/i.test(message) ? 'storage_failed' : 'provider_failed');
+      transition(
+        (lifecycleState as ImageGenerationState) === 'attaching'
+          ? 'attachment_failed'
+          : /persist|storage|asset/i.test(message)
+          ? 'storage_failed'
+          : 'provider_failed'
+      );
       setErrorMsg(message);
     } finally {
       setIsGenerating(false);
@@ -272,7 +276,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
       };
 
       onImageGenerated(newCampaignImg);
-      setGenerationState('completed');
+      setGenerationState('attached_locally');
       onClose();
     } catch (fallbackErr: any) {
       console.error('Fallback fixture failed', fallbackErr);

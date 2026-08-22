@@ -47,7 +47,7 @@ test('keyboard navigation and slide controls navigate across presentation', asyn
 });
 
 test('standalone presenter mode route loads full-screen without dashboard chrome', async ({ page }) => {
-  await page.goto('/?presenter=1&campaign=campaign-phoenix-fix-flip');
+  await page.goto('/?demo=1&presenter=1&campaign=campaign-phoenix-fix-flip');
 
   // Presenter mode renders PresentationRenderer directly
   const deck = page.locator('.zaw-deck');
@@ -63,10 +63,17 @@ test('standalone presenter mode route loads full-screen without dashboard chrome
   await expect(page.getByText(/Opportunity & Underwriting Overview/i)).toBeVisible();
 });
 
+test('live presenter routes do not substitute bundled demo campaigns', async ({ page }) => {
+  await page.goto('/?presenter=1&campaign=campaign-phoenix-fix-flip');
+
+  await expect(page.getByRole('heading', { name: /Campaign Not Found or Access Restricted/i })).toBeVisible();
+  await expect(page.locator('.zaw-deck')).not.toBeVisible();
+});
+
 test('slides do not scroll and fit responsively across desktop and mobile viewports', async ({ page }) => {
   // 1. Desktop 1440x900
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/?presenter=1&campaign=campaign-phoenix-fix-flip');
+  await page.goto('/?demo=1&presenter=1&campaign=campaign-phoenix-fix-flip');
   await expect(page.locator('.zaw-deck')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Phoenix 3-Bed Value-Add Flip/i })).toBeVisible();
   await page.waitForTimeout(650);
@@ -97,7 +104,7 @@ test('slides do not scroll and fit responsively across desktop and mobile viewpo
 
 test('key presentation slides match visual baselines', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?presenter=1&campaign=campaign-phoenix-fix-flip');
+  await page.goto('/?demo=1&presenter=1&campaign=campaign-phoenix-fix-flip');
   const deck = page.locator('.zaw-deck');
   await expect(deck).toBeVisible();
 
