@@ -8,7 +8,7 @@ import { claimGeneration, finishGeneration } from '../_shared/usage.ts';
 import { generateGeminiJson } from '../_shared/gemini.ts';
 import { assertGeminiTextModel, geminiTextIsPaid, GEMINI_TEXT_MODELS } from '../_shared/providers.ts';
 import { handleOptions, ensurePost, errorResponse, idempotencyKey, jsonResponse } from '../_shared/http.ts';
-import { parseBody } from '../_shared/validation.ts';
+import { extractionOutputSchema, parseBody } from '../_shared/validation.ts';
 
 const extractionRequestSchema = z.object({
   organizationId: z.string().uuid(),
@@ -168,9 +168,11 @@ ${body.rawText}
 
     try {
       const rawData = await generateGeminiJson(model, prompt, responseJsonSchema, 'high');
-      const fieldsExtractedCount = Object.keys((rawData as object) || {}).length;
+      const validated = extractionOutputSchema.safeParse(rawData);
+      if (!validated.success) throw new ProviderError('provider_invalid_output');
+      const fieldsExtractedCount = Object.keys(validated.data).length;
       const result = {
-        data: rawData,
+        data: validated.data,
         fieldsExtractedCount,
         rawInput: body.rawText,
         timestamp: new Date().toISOString(),

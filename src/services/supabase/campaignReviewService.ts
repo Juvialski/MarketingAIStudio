@@ -13,16 +13,30 @@ import { generateSecureReviewToken, hashReviewToken } from '../review/reviewCryp
 import { buildReviewSnapshot, SnapshotBuildOptions, getEffectiveReviewMaterials } from '../review/reviewSnapshotBuilder';
 import { CampaignReviewStore } from '../storage/campaignReviewStore';
 import { ServiceError } from './serviceError';
+import { RuntimeMode } from '../../types/runtime';
 import { 
   isCanonicalDemoToken, 
   getCanonicalDemoSnapshot 
 } from '../review/canonicalDemoReview';
 
-const isDemoContext = (organizationId?: string, campaignId?: string): boolean => {
+const isDemoContext = (
+  runtimeMode: RuntimeMode | undefined,
+  organizationId?: string,
+  campaignId?: string
+): boolean => {
+  if (runtimeMode) return runtimeMode === 'demo';
   if (!isSupabaseConfigured()) return true;
-  if (!organizationId || organizationId === 'demo-org' || organizationId === 'demo-mode') return true;
-  if (campaignId === 'campaign-phoenix-fix-flip' || campaignId === 'campaign-dallas-multifamily') return true;
-  return false;
+  // Backwards-compatible direct test/store callers. Application callers pass
+  // the explicit runtime mode so tenant IDs are never used as a live/demo
+  // security boundary.
+  return Boolean(
+    !organizationId ||
+    organizationId === 'demo-org' ||
+    organizationId === 'demo-mode' ||
+    organizationId.startsWith('test-') ||
+    campaignId === 'campaign-phoenix-fix-flip' ||
+    campaignId === 'campaign-dallas-multifamily'
+  );
 };
 
 export class CampaignReviewService {
@@ -30,9 +44,10 @@ export class CampaignReviewService {
 
   public static async getReviewLinks(
     organizationId: string,
-    campaignId: string
+    campaignId: string,
+    runtimeMode?: RuntimeMode
   ): Promise<ReviewLink[]> {
-    if (isDemoContext(organizationId, campaignId)) {
+    if (isDemoContext(runtimeMode, organizationId, campaignId)) {
       return CampaignReviewStore.getLinksByCampaign(campaignId);
     }
 
@@ -73,14 +88,15 @@ export class CampaignReviewService {
     permissions?: Partial<ReviewLinkPermissions>,
     expiresAt: string | null = null,
     userId?: string,
-    snapshotOptions?: SnapshotBuildOptions
+    snapshotOptions?: SnapshotBuildOptions,
+    runtimeMode?: RuntimeMode
   ): Promise<{ link: ReviewLink; rawToken: string; version: ReviewVersion }> {
     const effective = getEffectiveReviewMaterials(campaign, snapshotOptions);
     if (effective.totalCount === 0) {
       throw new ServiceError('write_failed', 'Cannot create a review package with no effective materials. Ensure at least one graphic format, presentation deck, or copy item is available and selected.');
     }
 
-    if (isDemoContext(organizationId, campaign.id)) {
+    if (isDemoContext(runtimeMode, organizationId, campaign.id)) {
       return CampaignReviewStore.createReviewLink(campaign, brandKit, permissions, expiresAt, snapshotOptions);
     }
 
@@ -95,7 +111,7 @@ export class CampaignReviewService {
       }
     }
 
-    const snapshot = buildReviewSnapshot(campaign, brandKit, snapshotOptions);
+    const snapshot = buildReviewSnapshot(campaign, brandKit, { ...snapshotOptions, runtimeMode });
 
     const permissionsPayload: ReviewLinkPermissions = {
       allowComments: permissions?.allowComments ?? true,
@@ -153,20 +169,21 @@ export class CampaignReviewService {
     brandKit: BrandKit,
     title?: string,
     notes?: string,
-    snapshotOptions?: SnapshotBuildOptions
+    snapshotOptions?: SnapshotBuildOptions,
+    runtimeMode?: RuntimeMode
   ): Promise<ReviewVersion> {
     const effective = getEffectiveReviewMaterials(campaign, snapshotOptions);
     if (effective.totalCount === 0) {
       throw new ServiceError('write_failed', 'Cannot publish a review version with no effective materials. Ensure at least one graphic format, presentation deck, or copy item is available and selected.');
     }
 
-    if (isDemoContext(organizationId, campaign.id)) {
+    if (isDemoContext(runtimeMode, organizationId, campaign.id)) {
       const res = await CampaignReviewStore.publishNewVersion(reviewLinkId, campaign, brandKit, title, notes, snapshotOptions);
       if (!res) throw new ServiceError('write_failed', 'Failed to publish new review version in store.');
       return res;
     }
 
-    const snapshot = buildReviewSnapshot(campaign, brandKit, snapshotOptions);
+    const snapshot = buildReviewSnapshot(campaign, brandKit, { ...snapshotOptions, runtimeMode });
 
     // Atomic version allocation & publication RPC
     const { data, error } = await supabase.rpc('publish_campaign_review_version_atomic', {
@@ -198,9 +215,10 @@ export class CampaignReviewService {
     reviewLinkId: string,
     campaign: Campaign,
     brandKit: BrandKit,
-    snapshotOptions?: SnapshotBuildOptions
+    snapshotOptions?: SnapshotBuildOptions,
+    runtimeMode?: RuntimeMode
   ): Promise<{ link: ReviewLink; rawToken: string }> {
-    if (isDemoContext(organizationId, campaign.id)) {
+    if (isDemoContext(runtimeMode, organizationId, campaign.id)) {
       const res = await CampaignReviewStore.rotateReviewLink(reviewLinkId, campaign, brandKit, snapshotOptions);
       if (!res) throw new ServiceError('write_failed', 'Failed to rotate review link in store.');
       return res;
@@ -250,9 +268,10 @@ export class CampaignReviewService {
 
   public static async revokeReviewLink(
     organizationId: string,
-    reviewLinkId: string
+    reviewLinkId: string,
+    runtimeMode?: RuntimeMode
   ): Promise<boolean> {
-    if (isDemoContext(organizationId)) {
+    if (isDemoContext(runtimeMode, organizationId)) {
       return CampaignReviewStore.revokeReviewLink(reviewLinkId);
     }
 
@@ -275,9 +294,10 @@ export class CampaignReviewService {
     organizationId: string,
     reviewLinkId: string,
     permissions: ReviewLinkPermissions,
-    expiresAt?: string | null
+    expiresAt?: string | null,
+    runtimeMode?: RuntimeMode
   ): Promise<ReviewLink> {
-    if (isDemoContext(organizationId)) {
+    if (isDemoContext(runtimeMode, organizationId)) {
       const res = CampaignReviewStore.updatePermissions(reviewLinkId, permissions, expiresAt);
       if (!res) throw new ServiceError('write_failed', 'Failed to update permissions in store.');
       return res;
@@ -325,9 +345,10 @@ export class CampaignReviewService {
 
   public static async getVersions(
     organizationId: string,
-    reviewLinkId: string
+    reviewLinkId: string,
+    runtimeMode?: RuntimeMode
   ): Promise<ReviewVersion[]> {
-    if (isDemoContext(organizationId)) {
+    if (isDemoContext(runtimeMode, organizationId)) {
       return CampaignReviewStore.getVersionsByLinkId(reviewLinkId);
     }
 
@@ -355,9 +376,10 @@ export class CampaignReviewService {
   public static async getFeedback(
     organizationId: string,
     reviewLinkId: string,
-    reviewVersionId?: string
+    reviewVersionId?: string,
+    runtimeMode?: RuntimeMode
   ): Promise<ReviewFeedback[]> {
-    if (isDemoContext(organizationId)) {
+    if (isDemoContext(runtimeMode, organizationId)) {
       return CampaignReviewStore.getFeedbackByLinkId(reviewLinkId, reviewVersionId);
     }
 
@@ -478,7 +500,16 @@ export class CampaignReviewService {
       }
     } catch (err) {
       console.error('[PublicReview] Edge function invocation exception:', err);
-      edgeFunctionFailedWith404OrNotDeployed = true;
+      const errMsg = String((err as any)?.message || '');
+      const errStatus = (err as any)?.status || (err as any)?.context?.status;
+      if (errMsg.includes('FunctionsFetchError') || errMsg.includes('404') || errStatus === 404 || errMsg.includes('Failed to send a request to the Edge Function')) {
+        edgeFunctionFailedWith404OrNotDeployed = true;
+      } else {
+        return {
+          status: 'not_found',
+          error: CampaignReviewService.SAFE_GENERIC_ERROR,
+        };
+      }
     }
 
     // 4. Direct Public RPC compatibility fallback (only when edge function is unavailable/not deployed)

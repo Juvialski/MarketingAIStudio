@@ -28,6 +28,58 @@ function parseSupabaseUrl(url?: string | null): { bucket: string; path: string }
   return null;
 }
 
+type ReviewAssetScope = {
+  allowedRefs: Set<string>;
+};
+
+async function hashReviewToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token.trim()));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function loadReviewAssetScope(admin: ReturnType<typeof createClient>, rawToken: string): Promise<ReviewAssetScope> {
+  const tokenHash = await hashReviewToken(rawToken);
+  const { data: link } = await admin
+    .from('campaign_review_links')
+    .select('organization_id, campaign_id')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+  if (!link) return { allowedRefs: new Set() };
+
+  const { data: campaign } = await admin
+    .from('campaigns')
+    .select('brand_kit_id')
+    .eq('id', link.campaign_id)
+    .eq('organization_id', link.organization_id)
+    .maybeSingle();
+  const { data: assets } = await admin
+    .from('campaign_assets')
+    .select('storage_bucket, storage_path')
+    .eq('campaign_id', link.campaign_id)
+    .eq('organization_id', link.organization_id);
+
+  const allowedRefs = new Set<string>(
+    (assets || []).map((asset) => `${asset.storage_bucket}:${asset.storage_path}`)
+  );
+
+  if (campaign?.brand_kit_id) {
+    const { data: brandKit } = await admin
+      .from('brand_kits')
+      .select('logo_storage_bucket, logo_storage_path, logo_dark_storage_bucket, logo_dark_storage_path')
+      .eq('id', campaign.brand_kit_id)
+      .eq('organization_id', link.organization_id)
+      .maybeSingle();
+    if (brandKit?.logo_storage_bucket && brandKit.logo_storage_path) {
+      allowedRefs.add(`${brandKit.logo_storage_bucket}:${brandKit.logo_storage_path}`);
+    }
+    if (brandKit?.logo_dark_storage_bucket && brandKit.logo_dark_storage_path) {
+      allowedRefs.add(`${brandKit.logo_dark_storage_bucket}:${brandKit.logo_dark_storage_path}`);
+    }
+  }
+
+  return { allowedRefs };
+}
+
 serve(async (req) => {
   const options = handleOptions(req);
   if (options) return options;
@@ -61,9 +113,10 @@ serve(async (req) => {
     }
 
     const snapshot = rpcResult.snapshot;
+    const assetScope = await loadReviewAssetScope(admin, body.rawToken);
 
     const signAsset = async (bucket: string, path: string): Promise<string> => {
-      if (!VALID_BUCKETS.has(bucket) || !path) return '';
+      if (!VALID_BUCKETS.has(bucket) || !path || !assetScope.allowedRefs.has(`${bucket}:${path}`)) return '';
       try {
         const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, 3600);
         if (error || !data?.signedUrl) return '';
@@ -136,6 +189,27 @@ serve(async (req) => {
                 if (signed) item.imageUrl = signed;
               }
             }
+          }
+        }
+      }
+    }
+
+    // Storage refs are an internal authorization mechanism, not part of the
+    // anonymous review contract. The signed URLs above are the only access
+    // artifacts the public viewer needs.
+    delete snapshot.heroImageRef;
+    if (snapshot.brandKit) {
+      delete snapshot.brandKit.logoRef;
+      delete snapshot.brandKit.logoDarkRef;
+    }
+    if (snapshot.presentation?.slides && Array.isArray(snapshot.presentation.slides)) {
+      for (const slide of snapshot.presentation.slides) {
+        delete slide.storageBucket;
+        delete slide.storagePath;
+        if (Array.isArray(slide.items)) {
+          for (const item of slide.items) {
+            delete item.storageBucket;
+            delete item.storagePath;
           }
         }
       }

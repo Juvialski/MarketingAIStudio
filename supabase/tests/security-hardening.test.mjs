@@ -136,6 +136,21 @@ test('hotfix migration 20260821150000 schema-qualifies extensions.digest and har
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.submit_public_campaign_approval\(TEXT, TEXT, TEXT, TEXT\) TO anon, authenticated, service_role;/);
 });
 
+test('public review signing is restricted to assets owned by the published campaign', async () => {
+  const source = await read('functions/get-public-review/index.ts');
+  assert.match(source, /loadReviewAssetScope/);
+  assert.match(source, /campaign_assets/);
+  assert.match(source, /allowedRefs\.has/);
+  assert.match(source, /delete snapshot\.heroImageRef/);
+});
+
+test('forward approval migration enforces the review comments permission for approval notes', async () => {
+  const sql = await read('migrations/20260822090000_review_approval_comment_permission.sql');
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.submit_public_campaign_approval/);
+  assert.match(sql, /IF v_sanitized_notes <> '' AND NOT v_link\.allow_comments/);
+  assert.match(sql, /Comments are disabled for this review link/);
+});
+
 test('full PostgreSQL migration replay from zero creates hardened RPCs and verifies token hashing execution', async () => {
   const db = new PGlite({
     extensions: { pgcrypto, uuid_ossp }

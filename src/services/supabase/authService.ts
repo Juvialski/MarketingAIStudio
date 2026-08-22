@@ -240,6 +240,7 @@ export class AuthService {
           operation: 'test_gemini',
           ...(organizationId ? { organizationId } : {}),
           ...(modelId ? { modelId } : {}),
+          idempotencyKey: crypto.randomUUID(),
         },
       });
 

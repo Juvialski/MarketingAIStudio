@@ -1,7 +1,10 @@
 import { supabase, isSupabaseConfigured } from './client';
 import { ServiceError } from './serviceError';
+import { CampaignImage } from '../../types/campaign';
+import { Database, Json } from '../../types/database.types';
 
 export type StorageBucket = 'property-media' | 'brand-assets' | 'campaign-assets' | 'campaign-exports';
+type CampaignAssetInsert = Database['public']['Tables']['campaign_assets']['Insert'];
 
 export interface StorageAsset {
   assetId?: string;
@@ -13,6 +16,42 @@ export interface StorageAsset {
   /** Backwards-compatible alias for existing intake code. */
   publicUrl: string;
   mimeType?: string;
+}
+
+export const MAX_PROPERTY_IMAGE_BYTES = 25 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+async function readBlobBytes(blob: Blob): Promise<Uint8Array> {
+  if (typeof blob.arrayBuffer === 'function') {
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => reject(reader.error || new Error('Unable to inspect the uploaded image.'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+/** Validate both the browser-declared MIME type and the binary image header. */
+export async function validatePropertyImageFile(file: File): Promise<void> {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    throw new ServiceError('validation_error', 'Upload a JPEG, PNG, or WebP property image.');
+  }
+  if (file.size <= 0 || file.size > MAX_PROPERTY_IMAGE_BYTES) {
+    throw new ServiceError('validation_error', 'Property images must be smaller than 25 MB.');
+  }
+
+  const bytes = (await readBlobBytes(file.slice(0, 12))).slice(0, 12);
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((v, i) => bytes[i] === v);
+  const isWebp = bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+
+  if (!isJpeg && !isPng && !isWebp) {
+    throw new ServiceError('validation_error', 'The uploaded file is not a valid JPEG, PNG, or WebP image.');
+  }
 }
 
 const segment = (value: string, label: string): string => {
@@ -96,39 +135,94 @@ export class StorageService {
     campaignId: string,
     file: File
   ): Promise<StorageAsset> {
+    await validatePropertyImageFile(file);
     const path = this.canonicalPropertyPath(organizationId, campaignId, file.name);
     const asset = await this.upload('property-media', path, file, false);
 
-    if (isSupabaseConfigured() && organizationId && campaignId && !campaignId.startsWith('demo-')) {
-      try {
-        const { data: assetRow } = await supabase
-          .from('campaign_assets')
-          .insert({
-            organization_id: organizationId,
-            campaign_id: campaignId,
-            asset_type: 'property_photo',
-            storage_bucket: 'property-media',
-            storage_path: path,
-            public_url: null,
-            mime_type: file.type || 'image/jpeg',
-            source: 'upload',
-            is_hero: false,
-            metadata: { original_name: file.name, size: file.size, provenance: 'uploaded' },
-          })
-          .select('id')
-          .maybeSingle();
-
-        if (assetRow?.id) {
-          asset.assetId = assetRow.id;
-        }
-      } catch (err) {
-        // If campaign record not yet committed, asset remains securely stored in Storage
-        console.warn('Could not register campaign_assets row yet', err);
-      }
-    }
-
     asset.mimeType = file.type || 'image/jpeg';
     return asset;
+  }
+
+  /**
+   * Register uploaded/generated refs after the campaign UUID exists. This is
+   * intentionally separate from the binary upload so a new-campaign draft
+   * never writes a fake `drafts` campaign ID into the asset table.
+   */
+  public static async registerCampaignAssets(
+    organizationId: string,
+    campaignId: string,
+    images: CampaignImage[]
+  ): Promise<CampaignImage[]> {
+    if (!isSupabaseConfigured()) return images;
+
+    const refs = images.filter((image) =>
+      image.storageBucket &&
+      image.storagePath &&
+      image.source !== 'sample' &&
+      image.provenance !== 'fixture' &&
+      image.storageBucket !== 'brand-assets' &&
+      image.storageBucket !== 'campaign-exports'
+    );
+    if (refs.length === 0) return images;
+
+    const paths = [...new Set(refs.map((image) => image.storagePath!))];
+    const { data: existingRows, error: lookupError } = await supabase
+      .from('campaign_assets')
+      .select('id, storage_bucket, storage_path')
+      .eq('organization_id', organizationId)
+      .eq('campaign_id', campaignId)
+      .in('storage_path', paths);
+    if (lookupError) {
+      throw new ServiceError('asset_persist_failed', 'Campaign asset metadata could not be checked before saving.', lookupError);
+    }
+
+    const existingByPath = new Map(
+      (existingRows || []).map((row) => [`${row.storage_bucket}:${row.storage_path}`, row.id])
+    );
+    const missing = refs.filter((image) => !existingByPath.has(`${image.storageBucket}:${image.storagePath}`));
+    if (missing.length === 0) return images;
+
+    const rows: CampaignAssetInsert[] = missing.map((image) => ({
+      organization_id: organizationId,
+      campaign_id: campaignId,
+      asset_type: image.source === 'upload' ? (image.isHero ? 'hero_photo' : 'property_photo') : 'ai_concept',
+      storage_bucket: image.storageBucket as StorageBucket,
+      storage_path: image.storagePath!,
+      public_url: null,
+      mime_type: image.mimeType || 'image/jpeg',
+      source: image.source === 'upload'
+        ? 'upload'
+        : image.provider === 'nvidia'
+        ? 'nvidia'
+        : image.provider === 'bfl'
+        ? 'bfl'
+        : 'generated',
+      provenance: image.provenance === 'uploaded' ? 'uploaded' : 'generated',
+      is_hero: image.isHero,
+      metadata: {
+        original_name: image.name,
+        provider: image.provider || null,
+        model: image.model || null,
+        provenance: image.provenance || 'generated',
+      } as unknown as Json,
+    }));
+
+    const { data: insertedRows, error: insertError } = await supabase
+      .from('campaign_assets')
+      .insert(rows)
+      .select('id, storage_bucket, storage_path');
+    if (insertError) {
+      throw new ServiceError('asset_persist_failed', 'Campaign asset metadata could not be saved.', insertError);
+    }
+
+    const idsByPath = new Map(existingByPath);
+    (insertedRows || []).forEach((row) => idsByPath.set(`${row.storage_bucket}:${row.storage_path}`, row.id));
+    return images.map((image) => {
+      const id = image.storageBucket && image.storagePath
+        ? idsByPath.get(`${image.storageBucket}:${image.storagePath}`)
+        : undefined;
+      return id && !image.assetId ? { ...image, assetId: id } : image;
+    });
   }
 
   public static async uploadBrandLogo(organizationId: string, file: File): Promise<StorageAsset> {
@@ -156,18 +250,19 @@ export class StorageService {
   ): Promise<void> {
     if (!isSupabaseConfigured()) return;
 
-    try {
-      // 1. Delete from campaign_assets table if present
-      await supabase
-        .from('campaign_assets')
-        .delete()
-        .eq('organization_id', organizationId)
-        .eq('storage_path', storagePath);
+    const { error: metadataError } = await supabase
+      .from('campaign_assets')
+      .delete()
+      .eq('organization_id', organizationId)
+      .eq('campaign_id', campaignId)
+      .eq('storage_path', storagePath);
+    if (metadataError) {
+      throw new ServiceError('asset_persist_failed', 'Campaign asset metadata could not be removed.', metadataError);
+    }
 
-      // 2. Remove object from Supabase Storage
-      await supabase.storage.from(bucket).remove([storagePath]);
-    } catch (err) {
-      console.warn('Asset deletion cleanup notice', err);
+    const { error: storageError } = await supabase.storage.from(bucket).remove([storagePath]);
+    if (storageError) {
+      throw new ServiceError('storage_failed', 'Campaign asset could not be removed from private storage.', storageError);
     }
   }
 }

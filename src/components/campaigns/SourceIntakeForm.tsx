@@ -6,6 +6,7 @@ import { DEFAULT_BRAND_KIT } from '../../types/brandKit';
 import { ImageGenerationModal } from '../images/ImageGenerationModal';
 import { PropertyExtractionService } from '../../services/extraction/propertyExtractionService';
 import { ExtractionResult } from '../../types/extraction';
+import { validatePropertyFinancials } from '../../services/financials/financialValidation';
 import { 
   DollarSign, 
   Upload, 
@@ -85,6 +86,7 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
   const [autofilledFields, setAutofilledFields] = useState<Set<string>>(new Set());
   const [conflicts, setConflicts] = useState<Map<string, ConflictItem>>(new Map());
   const [formValidationErrors, setFormValidationErrors] = useState<string[]>([]);
+  const [formValidationWarnings, setFormValidationWarnings] = useState<string[]>([]);
 
   // Calculate Real vs Conceptual Photo counts
   const realPhotosCount = uploadedImages.filter(
@@ -100,6 +102,7 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
 
     setIsUploading(true);
     try {
+      let shouldAssignHero = uploadedImages.length === 0;
       for (const file of Array.from(files)) {
         const asset = await StorageService.uploadPropertyPhoto(
           organizationId,
@@ -114,7 +117,7 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
           name: file.name,
           source: 'upload',
           aspectRatio: 1.5,
-          isHero: uploadedImages.length === 0,
+          isHero: shouldAssignHero,
           provenance: 'uploaded',
           isAiIllustrative: false,
           isConceptual: false,
@@ -124,9 +127,14 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
         };
 
         setUploadedImages((prev) => [...prev, newImg]);
+        shouldAssignHero = false;
       }
     } catch (err) {
       console.error('Photo upload failed', err);
+      setFormValidationErrors((previous) => [
+        ...previous,
+        err instanceof Error ? err.message : 'Photo upload failed. The campaign was not changed.',
+      ]);
     } finally {
       setIsUploading(false);
     }
@@ -164,7 +172,10 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
         campaignId,
         target.storagePath,
         (target.storageBucket as any) || 'property-media'
-      );
+      ).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'The asset was removed from the form but could not be deleted from storage.';
+        setFormValidationErrors((previous) => [...previous, message]);
+      });
     }
     setUploadedImages((prev) => prev.filter((img) => img.id !== id));
   };
@@ -362,6 +373,17 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
       errors.push('At least one authentic uploaded property photo is required for live campaigns. AI concept visuals and bundled demo fixtures cannot serve as proof of real property.');
     }
 
+    const financialReport = validatePropertyFinancials({
+      purchasePrice: typeof purchasePrice === 'number' ? purchasePrice : undefined,
+      renovationEstimate: typeof renovationEstimate === 'number' ? renovationEstimate : undefined,
+      arv: typeof arv === 'number' ? arv : undefined,
+      squareFeet: typeof squareFeet === 'number' ? squareFeet : undefined,
+      projectedRentMonthly: typeof projectedRent === 'number' ? projectedRent : undefined,
+      explicitCapRatePercent: typeof capRate === 'number' ? capRate : undefined,
+    });
+    setFormValidationWarnings(financialReport.warnings.map((issue) => issue.message));
+    errors.push(...financialReport.errors.map((issue) => issue.message));
+
     if (errors.length > 0) {
       setFormValidationErrors(errors);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -453,6 +475,19 @@ export const SourceIntakeForm: React.FC<SourceIntakeFormProps> = ({
           <ul className="list-disc list-inside text-xs text-red-800 space-y-1">
             {formValidationErrors.map((err, i) => (
               <li key={i}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {formValidationWarnings.length > 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+          <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Review financial assumptions</span>
+          </div>
+          <ul className="list-disc list-inside text-xs text-amber-800 space-y-1">
+            {formValidationWarnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
             ))}
           </ul>
         </div>

@@ -1,212 +1,194 @@
-# CODEX HANDOVER DOCUMENTATION
-## AI Real Estate Marketing & Business Automation Studio
+# DeedForge architecture handover
 
-**Project Name:** `zaw-marketing-studio`  
-**Version:** 2.2.0 (Dual-Tier AI Architecture: Gemini Marketing Intelligence & FLUX.2/NVIDIA Visual Engine)  
-**Target Audience:** Real Estate Investment Companies, Private Capital Funds, Value-Add Operators, Commercial Syndicators  
-**Primary Tech Stack:** React 18, TypeScript (Strict), Vite, Tailwind CSS, Supabase (`@supabase/supabase-js`), Lucide Icons, Vitest, `@google/genai`, Black Forest Labs API (`bfl`), NVIDIA NIM, `html-to-image`, `jspdf`, `jszip`
+Verified against the `main` branch and implementation state on 2026-08-22.
 
----
+DeedForge is a React 18 + TypeScript + Vite application with Supabase Auth,
+Postgres, private Storage, and authenticated Edge Functions. The browser owns
+presentation state; Supabase owns live campaign, asset, AI-usage, and review
+publication state.
 
-## 1. AI Provider Architecture & Quota Strategy
+## Architecture map
 
-### 1.1 Observed Project Quotas (Google AI Studio Dashboard)
-The system is configured with real observed Gemini project quotas:
-
-| Model ID | User-Facing Display Label | Observed RPM | Observed TPM | Observed RPD | Role / Tier |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `gemini-3.5-flash-lite` | **Recommended · High Volume** | 15 RPM | 250k TPM | **500 RPD** | **Default Model** (Routine Workloads) |
-| `gemini-3.1-flash-lite` | **High Volume Fallback** | 15 RPM | 250k TPM | **500 RPD** | **Primary High-Volume Fallback** |
-| `gemini-3.5-flash` | **Enhanced Quality · Limited** | 5 RPM | 250k TPM | **20 RPD** | Intermediate Quality Model |
-| `gemini-3.6-flash` | **Advanced · Limited** | 5 RPM | 250k TPM | **20 RPD** | Advanced Quantitative Synthesis |
-| `gemini-3.7-flash` | **Latest · Highest Quality · Limited** | 5 RPM | 250k TPM | **20 RPD** | **Preferred Premium Model** (Strategy/Review) |
-
----
-
-### 1.2 Model Selection & Workload Allocation
-* **Default High-Volume Model (`gemini-3.5-flash-lite`)**:
-  - Handles campaign drafts, platform copy adaptations (LinkedIn, Instagram, Facebook, Email, Video Reel Script), headline variations, CTA options, rewriting, copy cleanup, structured JSON generation, lead summaries, and background batch operations.
-* **Preferred Premium Model (`gemini-3.7-flash`)**:
-  - Reserved for high-value reasoning: institutional acquisitions strategy, complex underwriting thesis synthesis, difficult property modeling, multimodal analysis, and optional second-pass **"Professional Review"**.
-* **Intermediate Models (`gemini-3.6-flash` / `gemini-3.5-flash`)**:
-  - Intermediate quality options and step-down fallbacks.
-
----
-
-### 1.3 Quota Protection & Single-Turn Batch Generation
-To protect the scarce 20-RPD allowances on premium models and optimize the 500-RPD default tier:
-1. **Single-Request Full Marketing Kit**:
-   - The "Generate Full Marketing Kit" workflow executes **1 single structured JSON request** returning strategy, hooks, headlines, CTAs, Facebook post, Instagram caption, LinkedIn memo, Email newsletter, and 60s video script.
-   - Eliminates 5–8 individual API roundtrips.
-2. **On-Demand Premium Review**:
-   - Deep QA and legal compliance review using `gemini-3.7-flash` is triggered on-demand via the "Professional Review" button rather than automatically on every draft.
-3. **Deterministic Layout Isolation**:
-   - Zero AI calls are made on React component re-renders. Graphic layouts render deterministically via pure React/SVG.
-
----
-
-## 2. Visual Asset & Image Providers
-
-Image generation is a **strictly decoupled concern** from marketing intelligence. Creative briefs are compiled into a provider-independent `ImageCreativeBrief` interface and routed to either free development or optional paid premium providers.
-
-```
-Campaign Source Data + Brand Kit
-              ↓
-  CreativeBriefComposer
-              ↓
-      ImageCreativeBrief
-              ↓
-     ImageProviderRouter
-     ┌────────┴────────┐
-     ▼                 ▼
-FREE PROVIDERS     PAID PROVIDERS (Optional)
-• Real Uploads     • Black Forest Labs (FLUX.2 Pro / Max / Flex)
-• NVIDIA NIM       • Google Gemini (Nano Banana Pro)
-• Stock Fixtures   • OpenAI Image (Future Adapter)
+```text
+App / route state
+  -> campaign workspaces and feature components
+  -> application-facing services
+  -> Supabase client, Edge Functions, Storage, local demo stores
 ```
 
----
+Important current boundaries:
 
-### 2.1 Free Providers (Development & Routine Concepts)
+- `src/App.tsx` owns route selection, authenticated organization bootstrap,
+  campaign list/selection, Brand Kit state, and the explicit `demo`/`live`
+  runtime boundary.
+- `src/services/supabase/campaignService.ts` maps campaign rows and content
+  rows, sanitizes persistent asset URLs, registers asset metadata, and
+  hydrates fresh signed URLs before returning a live campaign.
+- `src/services/supabase/storageService.ts` owns tenant-scoped paths, upload
+  validation, Storage access, and post-save `campaign_assets` registration.
+- `src/services/supabase/assetResolver.ts` treats bucket/path/asset ID as
+  durable identity. Signed URLs and demo object references are runtime-only.
+- `src/services/providers/` contains the text/image provider contracts,
+  registries, secure Supabase Edge adapter, usage tracking, and cost controls.
+- `src/services/review/reviewSnapshotBuilder.ts` creates immutable review
+  snapshots. `CampaignReviewService` selects the live RPC/Edge path or the
+  explicitly scoped local demo store.
+- `supabase/functions/` authenticates live operations, validates request and
+  structured AI output, and keeps provider secrets server-side.
+- `src/components/campaigns/` remains feature-heavy, but route-level feature
+  loading keeps intake, workspace, review, settings, and presentation code
+  out of the initial bundle.
 
-#### 1. Authentic Photography (Upload-Only)
-* **Purpose:** Primary representation of actual listing condition, physical renovations, and factual deal materials.
-* **Implementation Status:** `LIVE` (Production Standard)
-* **Models:** `authentic-real-upload`, `curated-stock-fixture`
-* **Current Default:** **Priority 1 Default for Real Deals**
-* **API Adapter Location:** `src/services/providers/imageProvider.ts` (`UploadOnlyProvider`)
-* **Required Secret:** None (Uses Supabase Storage `property-media` bucket)
-* **Editing Support:** Manual crop, zoom, focal point adjust
-* **Multiple-Reference Support:** Yes (up to 20 uploaded photos)
-* **Cost Assumptions:** $0.00
-* **Resolution Support:** Original camera resolution up to 4K+
-* **Known Limitations:** Requires real photographer / user uploads.
-* **Fallback Behavior:** Curated architectural stock fixture.
+## Runtime modes
 
-#### 2. NVIDIA NIM Visual Engine
-* **Purpose:** Free development visual concepts, neighborhood aerials, background textures, and preliminary prototypes.
-* **Implementation Status:** `LIVE` (Development Standard)
-* **Models:** `stabilityai/sdxl-turbo`, `black-forest-labs/flux-1-schnell`, `stabilityai/stable-diffusion-3-medium`
-* **Current Default:** `stabilityai/sdxl-turbo`
-* **API Adapter Location:** `src/services/providers/nvidiaImageProvider.ts`
-* **Required Secret:** `NVIDIA_API_KEY` (Server-side Edge Function or local settings)
-* **Editing Support:** Prompt-based regeneration
-* **Multiple-Reference Support:** No (text-to-image only)
-* **Cost Assumptions:** $0.00 (Hosted free development tier)
-* **Resolution Support:** 1024×1024, 896×1120, 1344×768, 768×1344
-* **Known Limitations:** Lower fine-grained architectural control; no direct reference conditioning.
-* **Fallback Behavior:** Curated architectural stock fixture.
+- `demo`: intentional fictional fixtures, local campaign/review stores, and
+  deterministic/mock generation. Demo content is labeled and uses `Demo`,
+  `Fictional`, `fixture`, or equivalent provenance.
+- `live`: authenticated organization data and secure backend generation. Live
+  load/save/provider failures remain errors; they do not turn into sample
+  campaigns or fixture image results.
+- A no-backend local install is presented as the labeled demo workspace. A
+  `?demo=1` query explicitly selects demo mode even when Supabase is configured.
+- The standalone presenter route permits only the two known bundled demo
+  campaign IDs as a demo fixture route; arbitrary live presenter IDs cannot
+  resolve local samples.
 
----
+## Campaign persistence
 
-### 2.2 Paid Providers (Optional Maximum Quality & Production Standard)
+Campaign JSON is stored in `campaigns`; copy and presentation payloads are
+stored in `campaign_content` and hydrated into the domain `Campaign` type.
+Application callers pass `runtimeMode` to the live service methods. Content
+lookups are batched and writes are parallelized; obsolete copy/presentation
+content is removed when the complete campaign snapshot no longer contains it.
 
-#### 1. Black Forest Labs (FLUX.2)
-* **Purpose:** Premier photorealistic marketing hero assets, multi-reference architectural styling, and high-volume production social visuals.
-* **Implementation Status:** `LIVE` (Configurable / Opt-In)
-* **Models:**
-  * **`flux-2-max`** (Paid Maximum Quality): Flagship photorealism, fine architectural lighting, luxury finish precision.
-  * **`flux-2-pro`** (Paid Standard): Production social imagery, editorial concepts, multi-reference styling.
-  * **`flux-2-flex`** (Paid Specialized): Fine control over spatial composition and subtle typography inside imagery.
-* **Current Default:** `flux-2-max` for Hero visuals; `flux-2-pro` for supporting visuals.
-* **API Adapter Location:** `src/services/providers/bflImageProvider.ts`
-* **Required Secret:** `BFL_API_KEY` (Server-side Edge Function `generate-image` or local setting)
-* **Editing Support:** Image-to-image with `image_prompt_strength` (0.35 default for style transfer)
-* **Multiple-Reference Support:** Yes (Reference images passed via `image_prompt`)
-* **Cost Assumptions:**
-  * `flux-2-pro`: ~$0.05 / image
-  * `flux-2-max`: ~$0.08 / image
-  * `flux-2-flex`: ~$0.06 / image
-* **Resolution Support:** 1024×1024 (1:1), 896×1120 (4:5), 1344×768 (16:9), 768×1344 (9:16)
-* **Known Limitations:** Incurs API cost; requires deliberate workspace enablement.
-* **Fallback Behavior:** If unconfigured or budget exceeded $\to$ NVIDIA NIM or curated stock fixture (never spends money silently).
+The service still performs the campaign row and content writes as separate
+client requests. A future transaction/RPC should make that multi-row write
+fully atomic and add optimistic version checking for cross-device concurrent
+edits. This is the main remaining campaign-state risk.
 
-#### 2. Google Gemini Image Engine (Nano Banana Pro / Imagen 3)
-* **Purpose:** Multimodal visual generation with brand asset grounding and creative adjustments.
-* **Implementation Status:** `LIVE` (Configurable / Opt-In)
-* **Models:** `nano-banana-pro`, `nano-banana-2`, `imagen-3.0-generate-002`
-* **Current Default:** `nano-banana-pro`
-* **API Adapter Location:** `src/services/providers/geminiImageProvider.ts`
-* **Required Secret:** `GEMINI_API_KEY`
-* **Editing Support:** Multimodal prompt editing
-* **Multiple-Reference Support:** Yes
-* **Cost Assumptions:** ~$0.04 / image
-* **Resolution Support:** 1024×1024, 1280×720
-* **Known Limitations:** Free project tier observed 0 RPD for Nano Banana; treated as paid.
-* **Fallback Behavior:** Curated stock fixture.
+## Asset lifecycle
 
-#### 3. OpenAI Image Engine (Future Adapter)
-* **Purpose:** Future enterprise OpenAI image generation.
-* **Implementation Status:** `ADAPTER READY` (Inactive by default)
-* **Models:** `gpt-image-2`, `dall-e-3`
-* **Current Default:** `gpt-image-2`
-* **API Adapter Location:** `src/services/providers/openaiImageProvider.ts`
-* **Required Secret:** `OPENAI_API_KEY`
-* **Editing Support:** Inpainting / variation
-* **Cost Assumptions:** ~$0.06 / image
-* **Fallback Behavior:** Curated stock fixture.
-
----
-
-### 2.3 Deliberate Cost Safety & Workspace Spending Controls
-* **Deliberate Enablement:** Paid image generation is **OFF by default** (`enablePaidGeneration: false`).
-* **No Silent Upgrades:** The application will **never** silently switch from Free to Paid when a free provider fails.
-* **Workspace Spending Limits (`src/services/providers/imageSpendingTracker.ts`):**
-  * `maxImagesPerCampaign`: Limits generated images per deal (default: 5).
-  * `dailySpendingLimitUsd`: Max USD spend per day (default: $5.00).
-  * `monthlySpendingLimitUsd`: Max USD spend per month (default: $50.00).
-* **Pre-Generation Cost Estimate:** UI displays estimated cost (e.g. `Est. ~$0.08`) before generation.
-* **Cost Metadata:** Every generated image records `estimatedCostUsd`, `provider`, `model`, and `timestamp`.
-
----
-
-### 2.4 Strict Separation: Visual Asset vs. Graphic Design Engine
-* **AI image generators produce visual imagery only.**
-* Image generators **never** generate marketing flyers or typography containing text.
-* The deterministic React/SVG layout engine (`src/components/designs/`), typography pairs, and Brand Kit assemble the finished marketing designs.
-
----
-
-## 3. Test Suite & Verification Results
-
-All tests run via Vitest:
-
-```bash
-npm.cmd test
+```text
+upload/generation
+  -> validate type, size, and binary signature
+  -> persist private Storage object
+  -> save canonical bucket/path in campaign source data
+  -> register campaign_assets after a real campaign UUID exists
+  -> resolve a fresh signed URL for rendering
 ```
 
-### Verified Test Results:
-* `src/tests/modelRegistry.test.ts`: **8 tests passing** (Gemini 3.5 Flash Lite 500 RPD default, 3.1 Flash Lite 500 RPD fallback, 3.7 Flash 20 RPD premium, operation overrides, fallback chains).
-* `src/tests/imageProviderRegistry.test.ts`: **6 tests passing** (BFL FLUX.2 Pro/Max/Flex catalog, Gemini Nano Banana Pro, NVIDIA free tier, auto routing, creative brief composition).
-* `src/tests/imageCostSafety.test.ts`: **6 tests passing** (deliberate paid enablement, daily/monthly spending limit blockers, campaign image caps, unconfigured key fallbacks).
-* `src/tests/quotaAndFallback.test.ts`: **10 tests passing** (error classification, 429 quota routing, mock fallback, usage tracking, single-turn batch generation, image fallbacks).
-* `src/tests/antiSlopCritic.test.ts`: **5 tests passing** (slop pattern detection, regulatory claims, brand forbidden words, auto-cleaning, scoring).
-* `src/tests/strategyEngine.test.ts`: **2 tests passing** (strategy generation schema, multi-platform copy generation).
-* `src/tests/designLayoutStress.test.ts`: **7 tests passing** (currency formatting, number/percentage formatting, fix-and-flip metrics, multi-family metrics, zero-metric edge case, format dimensions, template families).
-* `src/tests/supabaseDataMapping.test.ts`: **4 tests passing** (project URL verification, multi-tenant storage path formatting, brand kit JSONB serialization, campaign row serialization).
-* **Total: 48 / 48 tests passing (100%).**
+Supported property upload types are JPEG, PNG, and WebP up to 25 MB. New live
+campaign intake may temporarily use an `org/drafts/...` Storage path; metadata
+registration is deferred until the server creates the campaign UUID, so the
+invalid `drafts` value is never inserted into `campaign_assets`.
 
----
+`campaign_assets` metadata includes the expanded source/provenance vocabulary
+from the production hardening migration. Generated images are persisted by
+`generate-image` before the UI attaches the canonical reference to campaign
+source data. A failed save is visible to the user, but abandoned draft objects
+still need a future cleanup/reconciliation job.
 
-## 4. Quickstart & Local Execution
+Private buckets and organization-prefixed Storage policies are established by
+the forward migration chain beginning with
+`20260820110000_production_hardening.sql`.
 
-1. Clone or open the repository:
-   ```bash
-   cd ZawMarketing
-   ```
-2. Install dependencies:
-   ```bash
-   npm.cmd install
-   ```
-3. Run test suite:
-   ```bash
-   npm.cmd test
-   ```
-4. Build for production:
-   ```bash
-   npm.cmd run build
-   ```
-5. Start local development server:
-   ```bash
-   npm.cmd run dev
-   ```
+## AI provider boundary
+
+- Live text and image generation use Supabase Edge Functions only.
+- Demo text uses deterministic mock generation; demo image fixtures are
+  available only from demo mode.
+- Live image generation returns a persisted private Storage asset, never a
+  provider URL.
+- Image attempts have a stable UI idempotency key; the server usage claim has
+  an organization/key uniqueness boundary.
+- `ImageGenerationModal` exposes preparing/submitting/generating/persisting/
+  attaching/completed and failure categories. A persistence error is not
+  presented as a generic provider success/failure ambiguity.
+- `extract-property-data`, strategy, copy, presentation, and critique routes
+  use runtime schemas. Paste Everything now validates the extracted payload at
+  the Edge boundary before returning it to the browser.
+- Quota numbers shown by registries are estimates/observations. Backend health
+  reports configured capability, and provider diagnostics are authenticated,
+  owner/admin scoped, and usage-metered.
+
+## Paste Everything and financial truth
+
+`PropertyExtractionService` retains a conservative deterministic parser for
+currency shorthand, addresses, rent, cap rates, bullets, and evidence snippets.
+Explicit demo calls do not contact the live Edge Function. Manual values remain
+authoritative in the intake merge flow; conflicting extracted values are
+flagged for review.
+
+`financialTruthEngine.ts` remains the arithmetic source of truth. The new
+`financialValidation.ts` reports deterministic errors for invalid inputs and
+warnings for suspicious combinations such as purchase price or all-in basis
+above ARV, renovation budget above ARV, and projected rent below current rent.
+
+## Public review
+
+Owner publication builds an immutable snapshot version. Live review links use
+256-bit opaque tokens hashed with SHA-256 server-side. Public access is
+anonymous through `get-public-review` with JWT verification disabled only for
+that function.
+
+The Edge Function now resolves the token to its campaign, verifies referenced
+asset metadata against that campaign/organization, signs only authorized
+objects, and removes internal Storage references from the anonymous response.
+Review feedback remains version-bound and material/variant validated. A
+forward-only migration also makes approval notes obey `allow_comments`.
+
+The direct RPC compatibility fallback remains for deployments where the Edge
+Function is not deployed, but transient deployed-function failures no longer
+fall through to it.
+
+## Performance
+
+Measured production builds with CI-like environment values:
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| Initial JS chunk | 1,698.34 kB | 1,037.22 kB |
+| Initial JS gzip | 477.27 kB | 319.36 kB |
+
+Presentation, public review, campaign intake, settings, Brand Kit, lead
+finder, and campaign workspace/export dependencies are lazy-loaded. Export
+libraries remain deferred with the workspace/export chunks.
+
+## Verification commands
+
+Verified locally in this run:
+
+- `npm run typecheck` — pass.
+- `npm test` — 44 test files, 229 tests pass.
+- `npm run test:security` — 14 tests pass, including full migration replay.
+- `npm run test:e2e` — 35 tests pass across desktop/mobile demo, review,
+  presentation, design, export, Brand Kit, and lightbox contracts.
+- Focused Playwright also passes: presentation 6/6, design 2/2, export 2/2,
+  lightbox 4/4.
+- `npm run build` — pass with the bundle measurements above.
+
+The local machine does not have the Deno CLI installed, so the CI-equivalent
+`deno check` loop was not runnable locally. The repository CI workflow remains
+the source of truth for Edge Function type checking.
+
+## Migrations
+
+`supabase/migrations/20260822090000_review_approval_comment_permission.sql`
+is forward-only and replaces the public approval RPC body so non-empty approval
+notes are rejected when comments are disabled. It does not edit an earlier
+applied migration or change the existing token/function signature.
+
+## Remaining risks
+
+- Campaign row plus `campaign_content` writes are still not one database
+  transaction; deploy a tested atomic save RPC before relying on concurrent
+  multi-device editing.
+- Pending AI usage claims can remain reserved if the Edge runtime dies before
+  `finish_ai_generation`; add a stale-claim lease/reconciliation policy.
+- Draft uploads abandoned before campaign creation can leave orphaned Storage
+  objects; add a cleanup job keyed by the `drafts` prefix and age.
+- Review-link mutation currently follows the existing organization-member
+  authorization model; tighten it to owner/admin if product policy requires
+  that restriction.
+- The new migration and Edge changes must be deployed to the configured remote
+  Supabase project before live users rely on them.

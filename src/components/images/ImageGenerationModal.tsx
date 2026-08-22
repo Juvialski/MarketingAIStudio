@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { CampaignImage } from '../../types/campaign';
 import { 
   ImageCreativeBrief, 
@@ -51,6 +51,18 @@ interface GenerationDiagnostics {
   provenance: string;
 }
 
+type GenerationState =
+  | 'idle'
+  | 'preparing'
+  | 'submitting'
+  | 'generating'
+  | 'persisting'
+  | 'attaching'
+  | 'completed'
+  | 'provider_failed'
+  | 'storage_failed'
+  | 'campaign_update_failed';
+
 export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   isOpen,
   onClose,
@@ -81,6 +93,8 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   const [progressMsg, setProgressMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<GenerationDiagnostics | null>(null);
+  const [generationState, setGenerationState] = useState<GenerationState>('idle');
+  const requestKeyRef = useRef<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -90,6 +104,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   const isPaidAllowed = spendingLimits.enablePaidGeneration && runtimeMode === 'live';
 
   const handleGenerate = async () => {
+    if (isGenerating || requestKeyRef.current) return;
     setErrorMsg(null);
     setDiagnostics(null);
 
@@ -128,7 +143,9 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
       }
     }
 
+    requestKeyRef.current = crypto.randomUUID();
     setIsGenerating(true);
+    setGenerationState('preparing');
     setProgressMsg('Composing creative brief...');
     const startTime = Date.now();
 
@@ -159,10 +176,15 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
         campaignId: campaignId || 'demo-campaign-preview', 
         organizationId: organizationId || 'demo-org', 
         runtimeMode,
-        generationMode
+        generationMode,
+        idempotencyKey: requestKeyRef.current,
       });
 
-      const result = await adapter.generateFromBrief(brief, (step) => setProgressMsg(step));
+      setGenerationState('submitting');
+      const result = await adapter.generateFromBrief(brief, (step) => {
+        setGenerationState(step.toLowerCase().includes('persist') ? 'persisting' : 'generating');
+        setProgressMsg(step);
+      });
 
       const durationMs = Date.now() - startTime;
       const isFixture = result.provider === 'demo_fixture' || result.provenance === 'fixture';
@@ -200,20 +222,27 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
         provenance: newCampaignImg.provenance || 'generated',
       });
 
+      setGenerationState('attaching');
       onImageGenerated(newCampaignImg);
+      setGenerationState('completed');
       onClose();
     } catch (err: any) {
       console.error('Image generation failed', err);
-      setErrorMsg(err.message || 'Image generation encountered an error.');
+      const message = err?.message || 'Image generation encountered an error.';
+      setGenerationState(/persist|storage|asset/i.test(message) ? 'storage_failed' : 'provider_failed');
+      setErrorMsg(message);
     } finally {
       setIsGenerating(false);
+      requestKeyRef.current = null;
       setProgressMsg('');
     }
   };
 
   const handleFallbackToFixture = async () => {
+    if (isGenerating || runtimeMode !== 'demo') return;
     setErrorMsg(null);
     setIsGenerating(true);
+    setGenerationState('preparing');
     setProgressMsg('Loading curated fixture visual...');
     try {
       const adapter = ImageProviderRouter.getAdapterForConfig(config, { runtimeMode: 'demo' });
@@ -243,9 +272,11 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
       };
 
       onImageGenerated(newCampaignImg);
+      setGenerationState('completed');
       onClose();
     } catch (fallbackErr: any) {
       console.error('Fallback fixture failed', fallbackErr);
+      setGenerationState('provider_failed');
       setErrorMsg(fallbackErr.message || 'Could not load fixture image.');
     } finally {
       setIsGenerating(false);
@@ -267,7 +298,7 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+    <div data-generation-state={generationState} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"
@@ -593,20 +624,22 @@ export const ImageGenerationModal: React.FC<ImageGenerationModalProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-red-200/60 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] text-red-700">
-                  You can immediately insert a bundled high-resolution visual fixture instead:
-                </span>
-                <button
-                  type="button"
-                  onClick={handleFallbackToFixture}
-                  disabled={isGenerating}
-                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition-colors"
-                >
-                  <Sparkles className="w-3 h-3 text-amber-400" />
-                  <span>Use Curated Fixture Asset Instead</span>
-                </button>
-              </div>
+              {runtimeMode === 'demo' && (
+                <div className="pt-2 border-t border-red-200/60 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-red-700">
+                    You can immediately insert a bundled high-resolution visual fixture instead:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleFallbackToFixture}
+                    disabled={isGenerating}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Use Curated Fixture Asset Instead</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

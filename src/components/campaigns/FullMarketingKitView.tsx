@@ -96,7 +96,7 @@ export const FullMarketingKitView: React.FC<FullMarketingKitViewProps> = ({
     if (!campaign.copy) return;
     setIsReviewingPremium(true);
     try {
-      const ai = ProviderManager.getAIProvider();
+      const ai = ProviderManager.getAIProvider(runtimeMode);
       const premiumModelId = config.premiumModelId || 'gemini-3.7-flash';
       
       const qualityReport = await ai.reviewCopyQuality(

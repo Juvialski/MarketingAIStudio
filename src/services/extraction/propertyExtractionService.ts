@@ -39,8 +39,10 @@ export class PropertyExtractionService {
       };
     }
 
-    // Try live AI Edge Function if configured and in live mode or with organizationId
-    if (isSupabaseConfigured() && options.organizationId) {
+    // The explicit runtime boundary matters here: a configured backend must
+    // not be contacted by a demo workspace merely because a caller supplied
+    // an organization-shaped value.
+    if (options.runtimeMode === 'live' && isSupabaseConfigured() && options.organizationId) {
       try {
         const { data, error } = await supabase.functions.invoke('extract-property-data', {
           body: {

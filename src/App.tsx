@@ -1,17 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { CampaignLibrary } from './components/campaigns/CampaignLibrary';
-import { CampaignWorkspace } from './components/campaigns/CampaignWorkspace';
-import { SourceIntakeForm } from './components/campaigns/SourceIntakeForm';
-import { BrandKitManager } from './components/brand/BrandKitManager';
-import { LeadFinder } from './components/leads/LeadFinder';
-import { SettingsView } from './components/settings/SettingsView';
 import { AuthModal } from './components/auth/AuthModal';
-import { PresentationRenderer } from './features/presentations/renderer/PresentationRenderer';
-import { generateDeterministicPresentationDeck } from './features/presentations/services/demoDeckGenerator';
 import { SAMPLE_CAMPAIGNS } from './data/sampleCampaigns';
-import { CampaignReviewPortal } from './components/review/CampaignReviewPortal';
 import { Presentation, AlertTriangle } from 'lucide-react';
 
 import { Campaign, CampaignSourceData } from './types/campaign';
@@ -24,6 +16,40 @@ import { CampaignService } from './services/supabase/campaignService';
 import { BrandKitService } from './services/supabase/brandKitService';
 import { isSupabaseConfigured } from './services/supabase/client';
 import { ServiceError } from './services/supabase/serviceError';
+
+const CampaignWorkspace = lazy(async () => {
+  const module = await import('./components/campaigns/CampaignWorkspace');
+  return { default: module.CampaignWorkspace };
+});
+const SourceIntakeForm = lazy(async () => {
+  const module = await import('./components/campaigns/SourceIntakeForm');
+  return { default: module.SourceIntakeForm };
+});
+const BrandKitManager = lazy(async () => {
+  const module = await import('./components/brand/BrandKitManager');
+  return { default: module.BrandKitManager };
+});
+const LeadFinder = lazy(async () => {
+  const module = await import('./components/leads/LeadFinder');
+  return { default: module.LeadFinder };
+});
+const SettingsView = lazy(async () => {
+  const module = await import('./components/settings/SettingsView');
+  return { default: module.SettingsView };
+});
+const CampaignReviewPortal = lazy(async () => {
+  const module = await import('./components/review/CampaignReviewPortal');
+  return { default: module.CampaignReviewPortal };
+});
+const PresenterView = lazy(async () => {
+  const module = await import('./features/presentations/components/PresenterView');
+  return { default: module.PresenterView };
+});
+
+const DEMO_PRESENTER_CAMPAIGN_IDS = new Set([
+  'campaign-phoenix-fix-flip',
+  'campaign-dallas-multifamily',
+]);
 
 export function App() {
   const [activeView, setActiveView] = useState<string>('dashboard');
@@ -41,6 +67,7 @@ export function App() {
   });
   const [dataError, setDataError] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const loadRequestRef = useRef(0);
 
   // Review mode parameters (/review/:token or ?review=:token)
   const { isReviewMode, reviewToken } = useMemo(() => {
@@ -87,6 +114,8 @@ export function App() {
   };
 
   const loadData = async () => {
+    const requestId = ++loadRequestRef.current;
+    const isCurrentRequest = () => requestId === loadRequestRef.current;
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const isExplicitDemo = params?.get('demo') === '1';
 
@@ -103,6 +132,7 @@ export function App() {
     }
 
     const live = isSupabaseConfigured();
+    if (!isCurrentRequest()) return;
     setRuntimeMode(live ? 'live' : 'demo');
     setDataError(null);
 
@@ -126,9 +156,11 @@ export function App() {
         }
 
         const [loadedCampaigns, loadedBrandKit] = await Promise.all([
-          CampaignService.getCampaigns(org.id),
-          BrandKitService.getBrandKit(org.id),
+          CampaignService.getCampaigns(org.id, 'live'),
+          BrandKitService.getBrandKit(org.id, 'live'),
         ]);
+
+        if (!isCurrentRequest()) return;
 
         setProfile(userProfile);
         setOrganization(org);
@@ -146,6 +178,7 @@ export function App() {
       setBrandKit(BrandKitStore.get({ allowDemoFixtures: true }));
       setHasPersistedBrandKit(false);
     } catch (error: unknown) {
+      if (!isCurrentRequest()) return;
       console.warn('Data load failed', error);
       setProfile(null);
       setOrganization(null);
@@ -198,7 +231,7 @@ export function App() {
       if (!organization) {
         throw new ServiceError('forbidden', 'Sign in to update a live campaign.');
       }
-      const saved = await CampaignService.updateCampaign(organization.id, updated, profile?.id);
+      const saved = await CampaignService.updateCampaign(organization.id, updated, profile?.id, 'live');
       setSelectedCampaign(saved);
       setCampaigns((previous) => previous.map((campaign) => (campaign.id === saved.id ? saved : campaign)));
       setDataError(null);
@@ -235,7 +268,7 @@ export function App() {
       if (!organization) {
         throw new ServiceError('forbidden', 'Sign in to create a live campaign.');
       }
-      const saved = await CampaignService.createCampaign(organization.id, draft, profile?.id);
+      const saved = await CampaignService.createCampaign(organization.id, draft, profile?.id, 'live');
       setCampaigns((previous) => [saved, ...previous]);
       setSelectedCampaign(saved);
       setActiveView('workspace');
@@ -257,7 +290,7 @@ export function App() {
       if (!organization) {
         throw new ServiceError('forbidden', 'Sign in to duplicate a live campaign.');
       }
-      const duplicated = await CampaignService.duplicateCampaign(id, organization.id, profile?.id);
+      const duplicated = await CampaignService.duplicateCampaign(id, organization.id, profile?.id, 'live');
       if (duplicated) setCampaigns((previous) => [duplicated, ...previous]);
       else setDataError('Campaign was not found.');
     } catch (error: unknown) {
@@ -281,7 +314,7 @@ export function App() {
       if (!organization) {
         throw new ServiceError('forbidden', 'Sign in to delete a live campaign.');
       }
-      await CampaignService.deleteCampaign(id, organization.id);
+      await CampaignService.deleteCampaign(id, organization.id, 'live');
       setCampaigns((previous) => previous.filter((campaign) => campaign.id !== id));
       if (selectedCampaign?.id === id) {
         setSelectedCampaign(null);
@@ -307,8 +340,8 @@ export function App() {
         throw new ServiceError('forbidden', 'Sign in to save a live brand kit.');
       }
       const saved = hasPersistedBrandKit
-        ? await BrandKitService.updateBrandKit(organization.id, updated)
-        : await BrandKitService.createBrandKit(organization.id, updated);
+        ? await BrandKitService.updateBrandKit(organization.id, updated, 'live')
+        : await BrandKitService.createBrandKit(organization.id, updated, 'live');
       setBrandKit(saved);
       setHasPersistedBrandKit(true);
       setDataError(null);
@@ -332,7 +365,11 @@ export function App() {
   // PUBLIC CLIENT REVIEW PORTAL STANDALONE ENTRY (/review/:token)
   // -------------------------------------------------------------
   if (isReviewMode && reviewToken) {
-    return <CampaignReviewPortal token={reviewToken} />;
+    return (
+      <Suspense fallback={<RouteLoading label="Loading public review…" />}>
+        <CampaignReviewPortal token={reviewToken} />
+      </Suspense>
+    );
   }
 
   // -------------------------------------------------------------
@@ -341,8 +378,9 @@ export function App() {
   if (isPresenterMode && presenterCampaignId) {
     // Resolve presenter campaign
     let presenterCampaign = campaigns.find((c) => c.id === presenterCampaignId);
+    const isAllowlistedDemoPresenter = DEMO_PRESENTER_CAMPAIGN_IDS.has(presenterCampaignId);
 
-    if (!presenterCampaign) {
+    if (!presenterCampaign && (runtimeMode === 'demo' || isAllowlistedDemoPresenter)) {
       presenterCampaign =
         CampaignStore.getById(presenterCampaignId, { allowDemoFixtures: true }) ||
         SAMPLE_CAMPAIGNS.find((c) => c.id === presenterCampaignId);
@@ -382,50 +420,15 @@ export function App() {
       );
     }
 
-    const isDemoCampaign = runtimeMode === 'demo' || presenterCampaign.tags?.includes('Demo') || presenterCampaign.tags?.includes('Fictional');
-    const presenterDeck = presenterCampaign.presentation || (isDemoCampaign ? generateDeterministicPresentationDeck(presenterCampaign, brandKit) : null);
-
-    if (!presenterDeck) {
-      return (
-        <div className="w-screen h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center space-y-4">
-          <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center text-amber-400">
-            <Presentation className="w-8 h-8" />
-          </div>
-          <h1 className="text-xl font-serif font-bold text-slate-100">Presentation Deck Not Found</h1>
-          <p className="text-sm text-slate-400 max-w-md">
-            The campaign "{presenterCampaign.name}" does not have an active presentation deck. Please open the Campaign Studio to generate one.
-          </p>
-          <a
-            href={window.location.pathname}
-            className="px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-colors"
-          >
-            Return to Dashboard
-          </a>
-        </div>
-      );
-    }
-
     return (
-      <div className="w-screen h-screen bg-slate-950 overflow-hidden flex flex-col">
-        <PresentationRenderer
-          deck={presenterDeck}
+      <Suspense fallback={<RouteLoading label="Loading presentation…" />}>
+        <PresenterView
           campaign={presenterCampaign}
           brandKit={brandKit}
-          onNotesChange={(slideIndex, notes) => {
-            if (presenterCampaign && presenterDeck) {
-              const updatedSlides = [...presenterDeck.slides];
-              if (updatedSlides[slideIndex]) {
-                updatedSlides[slideIndex] = {
-                  ...updatedSlides[slideIndex],
-                  speakerNotes: notes,
-                };
-                const updatedDeck = { ...presenterDeck, slides: updatedSlides };
-                void handleUpdateCampaign({ ...presenterCampaign, presentation: updatedDeck });
-              }
-            }
-          }}
+          runtimeMode={isAllowlistedDemoPresenter ? 'demo' : runtimeMode}
+          onUpdateCampaign={(updated) => void handleUpdateCampaign(updated)}
         />
-      </div>
+      </Suspense>
     );
   }
 
@@ -521,36 +524,50 @@ export function App() {
       )}
 
       {activeView === 'new_campaign' && (
-        <SourceIntakeForm
-          organizationId={runtimeMode === 'live' ? organization?.id : undefined}
-          campaignId={runtimeMode === 'live' ? 'drafts' : undefined}
-          runtimeMode={runtimeMode}
-          onSave={(sourceData) => void handleCreateNewCampaign(sourceData)}
-          onCancel={() => setActiveView('campaigns')}
-        />
+        <Suspense fallback={<RouteLoading label="Loading campaign intake…" />}>
+          <SourceIntakeForm
+            organizationId={runtimeMode === 'live' ? organization?.id : undefined}
+            campaignId={runtimeMode === 'live' ? 'drafts' : undefined}
+            runtimeMode={runtimeMode}
+            onSave={(sourceData) => void handleCreateNewCampaign(sourceData)}
+            onCancel={() => setActiveView('campaigns')}
+          />
+        </Suspense>
       )}
 
       {activeView === 'workspace' && selectedCampaign && (
-        <CampaignWorkspace
-          campaign={selectedCampaign}
-          brandKit={brandKit}
-          organizationId={organization?.id}
-          runtimeMode={runtimeMode}
-          onUpdateCampaign={(campaign) => void handleUpdateCampaign(campaign)}
-          onBack={() => setActiveView('campaigns')}
-        />
+        <Suspense fallback={<RouteLoading label="Loading campaign studio…" />}>
+          <CampaignWorkspace
+            campaign={selectedCampaign}
+            brandKit={brandKit}
+            organizationId={organization?.id}
+            runtimeMode={runtimeMode}
+            onUpdateCampaign={(campaign) => void handleUpdateCampaign(campaign)}
+            onBack={() => setActiveView('campaigns')}
+          />
+        </Suspense>
       )}
 
       {activeView === 'brand' && (
-        <BrandKitManager
-          brandKit={brandKit}
-          organizationId={organization?.id}
-          runtimeMode={runtimeMode}
-          onSaveBrandKit={(kit) => void handleSaveBrandKit(kit)}
-        />
+        <Suspense fallback={<RouteLoading label="Loading Brand Kit…" />}>
+          <BrandKitManager
+            brandKit={brandKit}
+            organizationId={organization?.id}
+            runtimeMode={runtimeMode}
+            onSaveBrandKit={(kit) => void handleSaveBrandKit(kit)}
+          />
+        </Suspense>
       )}
-      {activeView === 'leads' && <LeadFinder />}
-      {activeView === 'settings' && <SettingsView organizationId={organization?.id} />}
+      {activeView === 'leads' && (
+        <Suspense fallback={<RouteLoading label="Loading lead finder…" />}>
+          <LeadFinder />
+        </Suspense>
+      )}
+      {activeView === 'settings' && (
+        <Suspense fallback={<RouteLoading label="Loading settings…" />}>
+          <SettingsView organizationId={organization?.id} />
+        </Suspense>
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}
@@ -559,6 +576,14 @@ export function App() {
         onEnterDemo={handleEnterDemo}
       />
     </AppShell>
+  );
+}
+
+function RouteLoading({ label }: { label: string }) {
+  return (
+    <div className="min-h-[240px] flex items-center justify-center text-xs font-mono text-slate-500">
+      {label}
+    </div>
   );
 }
 

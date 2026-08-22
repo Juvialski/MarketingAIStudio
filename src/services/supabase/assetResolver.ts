@@ -90,7 +90,10 @@ export async function resolveAssetUrl(
         expiresInSeconds
       );
     } catch {
-      return ref.url || '';
+      // A known private asset must fail closed. Returning an expired signed
+      // URL leaves the UI looking broken and can hide an access/persistence
+      // failure behind a stale presentation artifact.
+      return '';
     }
   }
 
@@ -104,7 +107,7 @@ export async function resolveAssetUrl(
         expiresInSeconds
       );
     } catch {
-      return ref.url || '';
+      return '';
     }
   }
 
@@ -162,7 +165,7 @@ export async function hydrateCampaignAssets(campaign: Campaign): Promise<Campaig
       const url = await resolveAssetUrl(normalized);
       return {
         ...normalized,
-        url: url || normalized.url || '',
+        url: url || (normalized.storageBucket && normalized.storagePath ? '' : normalized.url || ''),
       };
     })
   );
@@ -198,7 +201,7 @@ export async function hydrateCampaignAssets(campaign: Campaign): Promise<Campaig
             ...slide,
             storageBucket: bucket,
             storagePath: path,
-            imageUrl: resolvedUrl || slide.imageUrl,
+            imageUrl: resolvedUrl || (bucket && path ? '' : slide.imageUrl),
           };
         }
 
@@ -228,7 +231,7 @@ export async function hydrateCampaignAssets(campaign: Campaign): Promise<Campaig
             ...slide,
             storageBucket: bucket,
             storagePath: path,
-            imageUrl: resolvedUrl || slide.imageUrl,
+            imageUrl: resolvedUrl || (bucket && path ? '' : slide.imageUrl),
           };
         }
 
@@ -256,7 +259,7 @@ export async function hydrateCampaignAssets(campaign: Campaign): Promise<Campaig
                 ...item,
                 storageBucket: bucket,
                 storagePath: path,
-                imageUrl: resolvedUrl || item.imageUrl || '',
+                imageUrl: resolvedUrl || (bucket && path ? '' : item.imageUrl || ''),
               };
             })
           );
@@ -330,8 +333,8 @@ export async function hydrateBrandKitAssets(brandKit: BrandKit): Promise<BrandKi
     logoStoragePath: logoPath,
     logoDarkStorageBucket: logoDarkBucket,
     logoDarkStoragePath: logoDarkPath,
-    logoUrl: logoUrl || brandKit.logoUrl,
-    logoDarkUrl: logoDarkUrl || brandKit.logoDarkUrl,
+    logoUrl: logoUrl || (logoBucket && logoPath ? '' : brandKit.logoUrl),
+    logoDarkUrl: logoDarkUrl || (logoDarkBucket && logoDarkPath ? '' : brandKit.logoDarkUrl),
   };
 }
 

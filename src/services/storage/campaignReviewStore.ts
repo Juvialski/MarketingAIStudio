@@ -502,6 +502,9 @@ export class CampaignReviewStore {
     if (!link.permissions.allowApproval) {
       return { success: false, error: 'Campaign approval is disabled for this link.' };
     }
+    if (notes && notes.trim() && !link.permissions.allowComments) {
+      return { success: false, error: 'Comments are disabled for this review link.' };
+    }
 
     const latestVersion = this.getLatestVersion(link.id);
     const now = new Date().toISOString();

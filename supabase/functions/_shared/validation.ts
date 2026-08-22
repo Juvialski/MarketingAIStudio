@@ -71,10 +71,65 @@ export const healthRequestSchema = z.object({
   operation: z.enum(['health', 'test_gemini', 'test_nvidia', 'test_all']).optional(),
   organizationId: uuid.optional(),
   modelId: boundedText(160).optional(),
+  idempotencyKey: boundedText(128).optional(),
 }).strict();
 
 export const publicReviewRequestSchema = z.object({
   rawToken: boundedText(256),
+}).strict();
+
+const extractedConfidence = z.number().min(0).max(1);
+const extractedString = z.object({
+  value: boundedText(5000),
+  confidence: extractedConfidence,
+  evidenceSnippet: z.string().trim().max(5000).optional(),
+}).strict();
+const extractedNumber = z.object({
+  value: z.number().finite(),
+  confidence: extractedConfidence,
+  evidenceSnippet: z.string().trim().max(5000).optional(),
+}).strict();
+const extractedStringArray = z.object({
+  value: z.array(boundedText(2000)).max(20),
+  confidence: extractedConfidence,
+  evidenceSnippet: z.string().trim().max(10_000).optional(),
+}).strict();
+const extractedCampaignType = extractedString.extend({
+  value: z.enum(['acquisition', 'fix_and_flip', 'cash_flow_rental', 'wholesale_deal', 'market_update', 'educational', 'company_announcement']),
+});
+const extractedPropertyType = extractedString.extend({
+  value: z.enum(['single_family', 'multi_family', 'condo', 'commercial', 'land', 'industrial']),
+});
+
+/** Runtime validation for the model boundary of Paste Everything. */
+export const extractionOutputSchema = z.object({
+  campaignType: extractedCampaignType,
+  title: extractedString,
+  targetMarket: extractedString,
+  address: extractedString,
+  city: extractedString,
+  state: extractedString,
+  zipCode: extractedString,
+  neighborhood: extractedString,
+  propertyType: extractedPropertyType,
+  bedrooms: extractedNumber,
+  bathrooms: extractedNumber,
+  squareFeet: extractedNumber,
+  lotSizeSqFt: extractedNumber,
+  yearBuilt: extractedNumber,
+  purchasePrice: extractedNumber,
+  renovationEstimate: extractedNumber,
+  arv: extractedNumber,
+  projectedRentMonthly: extractedNumber,
+  currentRentMonthly: extractedNumber,
+  inPlaceNOI: extractedNumber,
+  stabilizedNOI: extractedNumber,
+  capRatePercent: extractedNumber,
+  cashOnCashPercent: extractedNumber,
+  investmentThesis: extractedString,
+  dealHighlights: extractedStringArray,
+  renovationScope: extractedString,
+  notes: extractedString,
 }).strict();
 
 export async function parseBody<TSchema extends z.ZodTypeAny>(

@@ -10,6 +10,11 @@ import { MarketIntelligenceTemplate } from './templates/MarketIntelligenceTempla
 import { FlyerTemplate } from './templates/FlyerTemplate';
 import { resolveDemoAssetUrl } from '../../utils/demoAssets';
 
+// Runtime-only neutral placeholder. It is deliberately not a campaign asset,
+// is never persisted, and contains no fictional property photography.
+const EMPTY_IMAGE_PLACEHOLDER =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800"%3E%3Crect width="1200" height="800" fill="%23e2e8f0"/%3E%3Cpath d="M470 510h260l-34-210-96-80-96 80z" fill="none" stroke="%2364758b" stroke-width="10"/%3E%3Cpath d="M420 510h360M520 510v-100h160v100" fill="none" stroke="%2364758b" stroke-width="10"/%3E%3Ctext x="600" y="650" text-anchor="middle" font-family="sans-serif" font-size="34" fill="%23475569"%3EProperty image not provided%3C/text%3E%3C/svg%3E';
+
 interface DesignRendererProps {
   campaign: Campaign;
   aspectRatio: OutputAspectRatio;
@@ -59,10 +64,14 @@ export const DesignRenderer: React.FC<DesignRendererProps> = ({
     campaign.sourceData.uploadedImages.find((img) => img.id === config.imageId) ||
     campaign.sourceData.uploadedImages.find((img) => img.isHero) ||
     campaign.sourceData.uploadedImages[0] || {
-      url: '/demo/fictional-property-exterior.png',
+      // A live campaign without a resolved asset must remain visibly empty;
+      // silently inserting a fictional demo image corrupts the product truth.
+      url: '',
     };
 
-  const heroImageUrl = resolveDemoAssetUrl(heroImage.url) || heroImage.url;
+  const heroImageUrl = heroImage.url
+    ? (resolveDemoAssetUrl(heroImage.url) || heroImage.url)
+    : EMPTY_IMAGE_PLACEHOLDER;
 
   const dimensions = FORMAT_DIMENSIONS[aspectRatio];
   const isA4 = aspectRatio === 'flyer_a4';

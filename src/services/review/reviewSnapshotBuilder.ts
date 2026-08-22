@@ -14,12 +14,14 @@ import {
   SanitizedCopyChannel 
 } from '../../types/review';
 import { parseSupabaseStorageUrl } from '../supabase/assetResolver';
+import { RuntimeMode } from '../../types/runtime';
 
 export interface SnapshotBuildOptions {
   includedFormats?: OutputAspectRatio[];
   includedVariantsPerFormat?: Record<OutputAspectRatio, DesignTemplateFamily[]>;
   includePresentation?: boolean;
   includeCopy?: boolean;
+  runtimeMode?: RuntimeMode;
 }
 
 export interface EffectiveReviewMaterials {
@@ -85,10 +87,11 @@ export function buildReviewSnapshot(
   brandKit: BrandKit,
   options: SnapshotBuildOptions = {}
 ): ReviewSnapshot {
-  const isDemo =
-    Boolean(campaign.tags?.includes('Demo')) ||
-    Boolean(campaign.tags?.includes('Fictional')) ||
-    campaign.id.startsWith('demo-');
+  const isDemo = options.runtimeMode
+    ? options.runtimeMode === 'demo'
+    : Boolean(campaign.tags?.includes('Demo')) ||
+      Boolean(campaign.tags?.includes('Fictional')) ||
+      campaign.id.startsWith('demo-');
 
   // Hero image: live campaigns must NEVER use fictional demo property exterior!
   const heroImage =

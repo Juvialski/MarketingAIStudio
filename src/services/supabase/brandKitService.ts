@@ -3,6 +3,7 @@ import { BrandKit, DEFAULT_BRAND_KIT, ColorPalette, TypographyConfig } from '../
 import { BrandKitStore } from '../storage/brandKitStore';
 import { Database, Json } from '../../types/database.types';
 import { ServiceError } from './serviceError';
+import { RuntimeMode } from '../../types/runtime';
 
 import {
   hydrateBrandKitAssets,
@@ -79,9 +80,12 @@ const toUpdatePayload = (organizationId: string, brandKit: BrandKit): BrandKitUp
 };
 
 export class BrandKitService {
-  public static async getBrandKit(organizationId: string): Promise<BrandKit | null> {
-    if (!isSupabaseConfigured()) {
+  public static async getBrandKit(organizationId: string, runtimeMode?: RuntimeMode): Promise<BrandKit | null> {
+    if (runtimeMode === 'demo' || (!runtimeMode && !isSupabaseConfigured())) {
       return BrandKitStore.get({ allowDemoFixtures: true });
+    }
+    if (!isSupabaseConfigured()) {
+      throw new ServiceError('not_configured', 'The live brand kit backend is not configured.');
     }
 
     const { data, error } = await supabase
@@ -100,8 +104,13 @@ export class BrandKitService {
     return hydrateBrandKitAssets(mapped);
   }
 
-  public static async createBrandKit(organizationId: string, brandKit: BrandKit): Promise<BrandKit> {
-    if (!isSupabaseConfigured()) return BrandKitStore.save(brandKit);
+  public static async createBrandKit(
+    organizationId: string,
+    brandKit: BrandKit,
+    runtimeMode?: RuntimeMode
+  ): Promise<BrandKit> {
+    if (runtimeMode === 'demo' || (!runtimeMode && !isSupabaseConfigured())) return BrandKitStore.save(brandKit);
+    if (!isSupabaseConfigured()) throw new ServiceError('not_configured', 'The live brand kit backend is not configured.');
 
     const { data, error } = await supabase
       .from('brand_kits')
@@ -116,11 +125,16 @@ export class BrandKitService {
     return hydrateBrandKitAssets(saved);
   }
 
-  public static async updateBrandKit(organizationId: string, brandKit: BrandKit): Promise<BrandKit> {
+  public static async updateBrandKit(
+    organizationId: string,
+    brandKit: BrandKit,
+    runtimeMode?: RuntimeMode
+  ): Promise<BrandKit> {
     if (!brandKit.id) {
       throw new ServiceError('not_found', 'A saved brand kit ID is required for an update.');
     }
-    if (!isSupabaseConfigured()) return BrandKitStore.save(brandKit);
+    if (runtimeMode === 'demo' || (!runtimeMode && !isSupabaseConfigured())) return BrandKitStore.save(brandKit);
+    if (!isSupabaseConfigured()) throw new ServiceError('not_configured', 'The live brand kit backend is not configured.');
 
     const updates: BrandKitUpdate = toUpdatePayload(organizationId, brandKit);
     const { data, error } = await supabase
@@ -142,11 +156,13 @@ export class BrandKitService {
   public static async saveBrandKit(
     organizationId: string,
     brandKit: BrandKit,
-    operation: 'create' | 'update' = 'update'
+    operation: 'create' | 'update' = 'update',
+    runtimeMode?: RuntimeMode
   ): Promise<BrandKit> {
-    if (!isSupabaseConfigured()) return BrandKitStore.save(brandKit);
+    if (runtimeMode === 'demo' || (!runtimeMode && !isSupabaseConfigured())) return BrandKitStore.save(brandKit);
+    if (!isSupabaseConfigured()) throw new ServiceError('not_configured', 'The live brand kit backend is not configured.');
     return operation === 'create'
-      ? this.createBrandKit(organizationId, brandKit)
-      : this.updateBrandKit(organizationId, brandKit);
+      ? this.createBrandKit(organizationId, brandKit, runtimeMode)
+      : this.updateBrandKit(organizationId, brandKit, runtimeMode);
   }
 }

@@ -41,8 +41,8 @@ interface ShareReviewWorkspaceProps {
 export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
   campaign,
   brandKit,
-  organizationId = 'demo-org',
-  runtimeMode: _runtimeMode,
+  organizationId,
+  runtimeMode,
   onUpdateCampaign,
 }) => {
   const [activeLink, setActiveLink] = useState<ReviewLink | null>(null);
@@ -51,6 +51,7 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<ReviewFeedback[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -95,14 +96,15 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
   // Load Review state
   const loadReviewData = async (targetVersionId?: string) => {
     setLoading(true);
+    setReviewError(null);
     try {
-      const linkList = await CampaignReviewService.getReviewLinks(organizationId, campaign.id);
+      const linkList = await CampaignReviewService.getReviewLinks(organizationId || '', campaign.id, runtimeMode);
       const active = linkList.find((l) => l.isActive) || linkList[0] || null;
       setActiveLink(active);
 
       if (active) {
         setPermissions(active.permissions);
-        const vers = await CampaignReviewService.getVersions(organizationId, active.id);
+        const vers = await CampaignReviewService.getVersions(organizationId || '', active.id, runtimeMode);
         setVersions(vers);
 
         const versionToLoad = targetVersionId
@@ -112,7 +114,7 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
         setSelectedVersionId(versionToLoad?.id || null);
 
         const fbs = versionToLoad
-          ? await CampaignReviewService.getFeedback(organizationId, active.id, versionToLoad.id)
+          ? await CampaignReviewService.getFeedback(organizationId || '', active.id, versionToLoad.id, runtimeMode)
           : [];
         setFeedback(fbs);
       } else {
@@ -121,7 +123,9 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
         setFeedback([]);
       }
     } catch (e) {
+      const message = e instanceof Error ? e.message : 'Review data could not be loaded.';
       console.warn('Failed to load review data', e);
+      setReviewError(message);
     } finally {
       setLoading(false);
     }
@@ -129,7 +133,7 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
 
   useEffect(() => {
     void loadReviewData();
-  }, [campaign.id, organizationId]);
+  }, [campaign.id, organizationId, runtimeMode]);
 
   // Expiration calculation helper
   const calculateExpiresAt = (option: 'never' | '24h' | '7d' | '30d'): string | null => {
@@ -151,13 +155,14 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
     try {
       const expiresAt = calculateExpiresAt(expirationOption);
       const result = await CampaignReviewService.createReviewLink(
-        organizationId,
+        organizationId || '',
         campaign,
         brandKit,
         permissions,
         expiresAt,
         undefined,
-        getSnapshotBuildOptions()
+        getSnapshotBuildOptions(),
+        runtimeMode
       );
 
       setActiveLink(result.link);
@@ -183,13 +188,14 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
     setActionLoading(true);
     try {
       const newVersion = await CampaignReviewService.publishNewVersion(
-        organizationId,
+        organizationId || '',
         activeLink.id,
         campaign,
         brandKit,
         `Review Package v${(activeLink.currentVersionNumber || 1) + 1}`,
         undefined,
-        getSnapshotBuildOptions()
+        getSnapshotBuildOptions(),
+        runtimeMode
       );
       setVersions((prev) => [newVersion, ...prev]);
       setSelectedVersionId(newVersion.id);
@@ -209,11 +215,12 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
     setActionLoading(true);
     try {
       const result = await CampaignReviewService.rotateReviewLink(
-        organizationId,
+        organizationId || '',
         activeLink.id,
         campaign,
         brandKit,
-        getSnapshotBuildOptions()
+        getSnapshotBuildOptions(),
+        runtimeMode
       );
       setActiveLink(result.link);
       setRawToken(result.rawToken);
@@ -231,7 +238,7 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
     if (!confirm('Revoking this review link will immediately stop all client access. Continue?')) return;
     setActionLoading(true);
     try {
-      await CampaignReviewService.revokeReviewLink(organizationId, activeLink.id);
+      await CampaignReviewService.revokeReviewLink(organizationId || '', activeLink.id, runtimeMode);
       setActiveLink((prev) => (prev ? { ...prev, isActive: false } : null));
       setRawToken(null);
       void loadReviewData();
@@ -245,12 +252,15 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
   // Update Permissions
   const handleTogglePermission = async (key: keyof ReviewLinkPermissions) => {
     if (!activeLink) return;
+    const previousPermissions = permissions;
     const nextPerms = { ...permissions, [key]: !permissions[key] };
     setPermissions(nextPerms);
     try {
-      await CampaignReviewService.updatePermissions(organizationId, activeLink.id, nextPerms);
+      await CampaignReviewService.updatePermissions(organizationId || '', activeLink.id, nextPerms, undefined, runtimeMode);
     } catch (e) {
       console.warn('Failed to update permissions', e);
+      setPermissions(previousPermissions);
+      setReviewError(e instanceof Error ? e.message : 'Review permissions could not be saved.');
     }
   };
 
@@ -279,13 +289,14 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
   };
 
   const isDemoCampaign = useMemo(() => {
-    return (
+    return runtimeMode === 'demo' && (
+      campaign.tags?.includes('Demo') ||
+      campaign.tags?.includes('Fictional') ||
+      campaign.id.startsWith('demo-') ||
       campaign.id === 'campaign-phoenix-fix-flip' ||
-      campaign.id === 'campaign-dallas-multifamily' ||
-      organizationId === 'demo-org' ||
-      organizationId === 'demo-mode'
+      campaign.id === 'campaign-dallas-multifamily'
     );
-  }, [campaign.id, organizationId]);
+  }, [campaign.id, campaign.tags, runtimeMode]);
 
   // Build public link URL
   const publicReviewUrl = useMemo(() => {
@@ -350,6 +361,15 @@ export const ShareReviewWorkspace: React.FC<ShareReviewWorkspaceProps> = ({
 
   return (
     <div className="space-y-8 max-w-[1500px] mx-auto">
+      {reviewError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 text-red-900 text-xs" role="alert">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          <div>
+            <div className="font-bold">Review workspace data could not be synchronized.</div>
+            <div className="mt-0.5 text-red-800">{reviewError} You can retry the tab or continue once the live workspace is available.</div>
+          </div>
+        </div>
+      )}
       {/* 1. Header Banner */}
       <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-subtle flex flex-wrap items-center justify-between gap-6">
         <div className="max-w-xl">

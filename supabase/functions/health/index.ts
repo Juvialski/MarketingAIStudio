@@ -9,12 +9,27 @@ import { parseBody, healthRequestSchema } from '../_shared/validation.ts';
 import { BFL_IMAGE_MODELS, GEMINI_TEXT_MODELS, NVIDIA_IMAGE_MODELS, defaultImageModel, assertGeminiTextModel, assertImageModel } from '../_shared/providers.ts';
 import { generateGeminiJson } from '../_shared/gemini.ts';
 import { generateNvidiaImage } from '../_shared/image.ts';
+import { claimGeneration, finishGeneration } from '../_shared/usage.ts';
+import { idempotencyKey } from '../_shared/http.ts';
 
 const configured = (name: string): boolean => Boolean(Deno.env.get(name));
 const configuredPricing = (name: string): boolean => {
   const value = Number(Deno.env.get(name));
   return Number.isFinite(value) && value >= 0;
 };
+
+async function assertProviderTestAccess(ctx: Awaited<ReturnType<typeof authenticate>>, organizationId: string): Promise<void> {
+  await assertOrganizationAccess(ctx, organizationId);
+  const { data: membership, error } = await ctx.admin
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', ctx.user.id)
+    .maybeSingle();
+  if (error || !membership || !['owner', 'admin'].includes(membership.role)) {
+    throw new AppError('organization_access_denied', 403, 'Only organization owners or admins can run provider diagnostics.');
+  }
+}
 
 serve(async (req) => {
   const options = handleOptions(req);
@@ -29,18 +44,37 @@ serve(async (req) => {
     }
 
     if (body.operation === 'test_gemini') {
+      if (!body.organizationId) throw new AppError('organization_access_denied', 403, 'A workspace is required to run provider diagnostics.');
+      await assertProviderTestAccess(ctx, body.organizationId);
       if (!configured('GEMINI_API_KEY')) {
         throw new AppError('provider_not_configured', 503, 'GEMINI_API_KEY is not configured in Edge Function secrets.');
       }
       const model = body.modelId || GEMINI_TEXT_MODELS[0];
       assertGeminiTextModel(model);
       const startTime = Date.now();
+      const claim = await claimGeneration(ctx.admin, {
+        organizationId: body.organizationId,
+        userId: ctx.user.id,
+        campaignId: null,
+        operationType: 'provider-diagnostic-gemini',
+        provider: 'gemini',
+        model,
+        idempotencyKey: idempotencyKey(req, body),
+        isPaid: false,
+        estimatedCostUsd: 0,
+      });
       const testSchema = {
         type: 'OBJECT',
         properties: { status: { type: 'STRING' } },
         required: ['status'],
       };
-      await generateGeminiJson(model, 'Respond with JSON {"status": "ok"}', testSchema, 'low');
+      try {
+        await generateGeminiJson(model, 'Respond with JSON {"status": "ok"}', testSchema, 'low');
+        await finishGeneration(ctx.admin, claim.usageId, 'success', undefined, 0);
+      } catch (error) {
+        await finishGeneration(ctx.admin, claim.usageId, 'failed', error instanceof ProviderError ? error.code : 'provider_error');
+        throw error;
+      }
       const latencyMs = Date.now() - startTime;
       return jsonResponse(req, {
         ok: true,
@@ -54,13 +88,33 @@ serve(async (req) => {
     }
 
     if (body.operation === 'test_nvidia') {
+      if (!body.organizationId) throw new AppError('organization_access_denied', 403, 'A workspace is required to run provider diagnostics.');
+      await assertProviderTestAccess(ctx, body.organizationId);
       if (!configured('NVIDIA_API_KEY')) {
         throw new AppError('provider_not_configured', 503, 'NVIDIA_API_KEY is not configured in Edge Function secrets.');
       }
       const model = body.modelId || defaultImageModel('nvidia');
       assertImageModel('nvidia', model);
       const startTime = Date.now();
-      const testImage = await generateNvidiaImage(model, 'Minimal geometric modern architectural icon symbol', '1:1');
+      const claim = await claimGeneration(ctx.admin, {
+        organizationId: body.organizationId,
+        userId: ctx.user.id,
+        campaignId: null,
+        operationType: 'provider-diagnostic-nvidia',
+        provider: 'nvidia',
+        model,
+        idempotencyKey: idempotencyKey(req, body),
+        isPaid: false,
+        estimatedCostUsd: 0,
+      });
+      let testImage;
+      try {
+        testImage = await generateNvidiaImage(model, 'Minimal geometric modern architectural icon symbol', '1:1');
+        await finishGeneration(ctx.admin, claim.usageId, 'success', undefined, 0, testImage.providerRequestId);
+      } catch (error) {
+        await finishGeneration(ctx.admin, claim.usageId, 'failed', error instanceof ProviderError ? error.code : 'provider_error');
+        throw error;
+      }
       const latencyMs = Date.now() - startTime;
       return jsonResponse(req, {
         ok: true,

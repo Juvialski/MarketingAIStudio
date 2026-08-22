@@ -6,6 +6,7 @@ import {
   ProviderConfig,
 } from '../../types/providers';
 import { isSupabaseConfigured, supabase } from '../supabase/client';
+import { ServiceError } from '../supabase/serviceError';
 import { ImageProviderRegistry } from './imageProviderRegistry';
 
 export const CURATED_STOCK_PHOTOS = [
@@ -73,6 +74,8 @@ export interface EdgeImageContext {
   organizationId?: string;
   runtimeMode?: 'demo' | 'live';
   generationMode?: GenerationMode;
+  /** Stable across one UI attempt so server-side idempotency can reject duplicates. */
+  idempotencyKey?: string;
 }
 
 export async function extractEdgeErrorMessage(error: any): Promise<{ code: string; message: string }> {
@@ -207,7 +210,7 @@ export class SupabaseEdgeImageProvider implements IImageProvider {
         model: resolved.modelId,
         campaignId: this.context.campaignId,
         organizationId: this.context.organizationId,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: this.context.idempotencyKey || crypto.randomUUID(),
       },
     });
 
@@ -281,6 +284,9 @@ export class ImageProviderRouter {
       return new SupabaseEdgeImageProvider(config, context);
     }
 
-    return new UploadOnlyProvider();
+    throw new ServiceError(
+      'not_configured',
+      'Live image generation is unavailable because the secure backend is not configured. Use the explicitly labeled demo workspace for fictional fixtures.'
+    );
   }
 }

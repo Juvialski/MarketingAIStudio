@@ -275,7 +275,8 @@ export interface Database {
           width: number | null;
           height: number | null;
           aspect_ratio: string | null;
-          source: 'upload' | 'gemini' | 'nvidia' | 'rendered_template' | 'sample';
+          source: 'upload' | 'uploaded' | 'gemini' | 'nvidia' | 'bfl' | 'openai' | 'generated' | 'rendered_template' | 'sample' | 'fixture';
+          provenance: 'uploaded' | 'generated' | 'fixture' | 'failed';
           is_hero: boolean;
           metadata: Json;
           created_at: string;
@@ -292,7 +293,8 @@ export interface Database {
           width?: number | null;
           height?: number | null;
           aspect_ratio?: string | null;
-          source?: 'upload' | 'gemini' | 'nvidia' | 'rendered_template' | 'sample';
+          source?: 'upload' | 'uploaded' | 'gemini' | 'nvidia' | 'bfl' | 'openai' | 'generated' | 'rendered_template' | 'sample' | 'fixture';
+          provenance?: 'uploaded' | 'generated' | 'fixture' | 'failed';
           is_hero?: boolean;
           metadata?: Json;
           created_at?: string;
@@ -309,7 +311,8 @@ export interface Database {
           width?: number | null;
           height?: number | null;
           aspect_ratio?: string | null;
-          source?: 'upload' | 'gemini' | 'nvidia' | 'rendered_template' | 'sample';
+          source?: 'upload' | 'uploaded' | 'gemini' | 'nvidia' | 'bfl' | 'openai' | 'generated' | 'rendered_template' | 'sample' | 'fixture';
+          provenance?: 'uploaded' | 'generated' | 'fixture' | 'failed';
           is_hero?: boolean;
           metadata?: Json;
           created_at?: string;

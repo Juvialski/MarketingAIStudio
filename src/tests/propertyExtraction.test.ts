@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { PropertyExtractionService } from '../services/extraction/propertyExtractionService';
+import { supabase } from '../services/supabase/client';
 
 describe('PropertyExtractionService ("Paste Everything" Intake)', () => {
   it('extracts complete property facts from raw MLS remarks without hallucinating', async () => {
@@ -63,5 +64,16 @@ describe('PropertyExtractionService ("Paste Everything" Intake)', () => {
     expect(data.arv).toBeUndefined();
     expect(data.bedrooms).toBeUndefined();
     expect(data.squareFeet).toBeUndefined();
+  });
+
+  it('does not call the live Edge Function from an explicit demo workspace', async () => {
+    const invoke = vi.spyOn(supabase.functions, 'invoke');
+    const result = await PropertyExtractionService.extractPropertyData(
+      'Market: Phoenix, AZ. Asking $350k.',
+      { organizationId: 'org-shaped-demo-value', runtimeMode: 'demo' }
+    );
+
+    expect(result.source).toBe('deterministic_fallback');
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

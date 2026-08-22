@@ -4,6 +4,8 @@ import { SupabaseFunctionsProvider } from './supabaseFunctionsProvider';
 import { ImageProviderRouter } from './imageProvider';
 import { SettingsStore } from '../storage/settingsStore';
 import { isSupabaseConfigured } from '../supabase/client';
+import { ServiceError } from '../supabase/serviceError';
+import { RuntimeMode } from '../../types/runtime';
 
 export class ProviderManager {
   /**
@@ -12,12 +14,17 @@ export class ProviderManager {
    * 1. Supabase Edge Functions (when backend is live)
    * 2. Explicit high-fidelity demo fixture when no backend is configured
   */
-  public static getAIProvider(runtimeMode: 'demo' | 'live' = 'live'): IAIProvider {
-    if (runtimeMode !== 'demo' && isSupabaseConfigured()) {
+  public static getAIProvider(runtimeMode: RuntimeMode = 'live'): IAIProvider {
+    if (runtimeMode === 'live' && isSupabaseConfigured()) {
       return new SupabaseFunctionsProvider();
     }
 
-    return new MockAIProvider();
+    if (runtimeMode === 'demo') return new MockAIProvider();
+
+    throw new ServiceError(
+      'not_configured',
+      'Live AI generation is unavailable because the secure backend is not configured. Switch to the explicitly labeled demo workspace or configure Supabase.'
+    );
   }
 
   /**
@@ -25,8 +32,8 @@ export class ProviderManager {
    * explicitly fictional fixture provider in demo mode. Provider credentials
    * and paid-generation authorization never live in this browser bundle.
    */
-  public static getImageProvider(): IImageProvider {
+  public static getImageProvider(runtimeMode: RuntimeMode = 'live'): IImageProvider {
     const config = SettingsStore.get();
-    return ImageProviderRouter.getAdapterForConfig(config);
+    return ImageProviderRouter.getAdapterForConfig(config, { runtimeMode });
   }
 }
